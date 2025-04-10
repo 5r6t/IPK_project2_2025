@@ -36,12 +36,14 @@
          void run();
  
      private:
+         void print_local_help();
          void handle_command(const std::string& line);
          void handle_chat_msg(const std::string& line);
          void auth(const std::vector<std::string>& args);   // sends auth request
          void join(const std::vector<std::string>& args);   // sends join rqst
          void rename(const std::vector<std::string>& args); // sends rename rqst
-         void print_local_help();
+         void fsm_handler(ClientState new_state, const std::string &from_command); // handles state change requests
+
  
          int sockfd = -1;
          std::string display_name;

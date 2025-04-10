@@ -23,17 +23,28 @@ void Client_Init::set_protocol(std::string protocol) {
 }
 
 void Client_Init::set_ip(std::string host) {
-    struct addrinfo hints, *result;
+    struct addrinfo hints, *result, *next;
+    char ip_buffer[INET_ADDRSTRLEN];
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET; // IPv4 only
-    hints.ai_socktype = SOCK_STREAM; // TCP
+    hints.ai_family = AF_INET; // Allow IPv4
+    hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
 
     if (getaddrinfo(host.c_str(), nullptr, &hints, &result) != 0) {
-        std::cerr << "Error: Unable to resolve IP or hostname: " << host << std::endl;
+        std::cerr << "Error: Unable to resolve domain name: " << host << std::endl;
         exit(ERR_INVALID);
     }
-    // Accept first valid result
-    this->ip = host;
+    for (next = result; next != nullptr; next = next->ai_next) { // Loop through getaddrinfo results
+        void* addr;
+        if (next->ai_family == AF_INET) {
+            struct sockaddr_in* ipv4 = (struct sockaddr_in*)next->ai_addr;
+            addr = &(ipv4->sin_addr);
+        }
+        else 
+            continue; // Skip unsupported address families
+
+        inet_ntop(next->ai_family, addr, ip_buffer, sizeof(ip_buffer)); // Address to string
+        this->ip = ip_buffer;
+    }
     freeaddrinfo(result);
 }
 

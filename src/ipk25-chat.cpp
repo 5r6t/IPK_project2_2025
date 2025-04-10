@@ -51,7 +51,7 @@
 
     config.validate();
     Client_Session session(config);
-    //session.run();
+    session.run();
 
     return 0;
 }

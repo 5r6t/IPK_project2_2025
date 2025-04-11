@@ -16,7 +16,7 @@ uint8_t     Client_Init::get_retries()  const { return retries; }
 
 void Client_Init::set_protocol(std::string protocol) {
     if (protocol != "tcp" && protocol != "udp") {
-        std::cerr << "Error: " << protocol << " is not valid" << std::endl;
+        std::cerr << "Error: " << protocol << " is not valid\n";
         exit(ERR_INVALID);
     }
     this->protocol = protocol;
@@ -49,17 +49,17 @@ void Client_Init::set_ip(std::string host) {
 }
 
 void Client_Init::set_port(std::string port) {
-    int p = catch_stoi(port, std::numeric_limits<uint16_t>::max(),"Ports");
+    int p = Toolkit::catch_stoi(port, std::numeric_limits<uint16_t>::max(),"Ports");
     this->port = static_cast<uint16_t>(p);
 }
 
 void Client_Init::set_udp_timeout(std::string timeout) {
-    int t = catch_stoi(timeout, std::numeric_limits<uint16_t>::max(),"UDP timeout");
+    int t = Toolkit::catch_stoi(timeout, std::numeric_limits<uint16_t>::max(),"UDP timeout");
     this->timeout = static_cast<uint16_t>(t);
 }
 
 void Client_Init::set_udp_retries(std::string retries) {
-    int r = catch_stoi(retries, std::numeric_limits<uint8_t>::max(),"UDP retries");
+    int r = Toolkit::catch_stoi(retries, std::numeric_limits<uint8_t>::max(),"UDP retries");
     this->retries = static_cast<uint8_t>(r);
 }
 

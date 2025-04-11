@@ -14,7 +14,7 @@
  #include <netdb.h> // getaddrinfo
  #include <arpa/inet.h> // inet_ntop
  #include <limits>
-  
+
  class Client_Init {
      public:
          void set_protocol(std::string protocol); // values tcp or udp

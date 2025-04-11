@@ -23,12 +23,27 @@ void Client_Session::print_local_help() {
 std::atomic<bool>stop_requested= false;
 
 void Client_Session::handle_sigint(int) {
-    stop_requested = true;
+    //stop_requested = true;
+    graceful_exit(); // avoid getline blocking ctrl+c
 }
+
+void Client_Session::graceful_exit() {
+    printf_debug("%s", "Graceful shutdown requested.");
+    
+    //if (/* socket open & authenticated */) {
+        // send BYE message here }
+
+    // close socket if open
+    // set state = ClientState::End;
+    
+    exit(0); // final termination
+}
+
 
 void Client_Session::run() {
     std::signal(SIGINT, handle_sigint);
     std::string line;
+
     while(std::getline(std::cin, line)) {
         if (stop_requested) break;
 
@@ -41,12 +56,8 @@ void Client_Session::run() {
             handle_chat_msg(line);
         } 
     }
-    if (stop_requested || std::cin.eof()) {
-        printf_debug("%s", "Graceful shutdown requested (Ctrl+C or Ctrl+D)");
-        //send_bye();        // <- your method to send BYE to server
-        std::cerr << "Bye\n";
-        //close(sockfd);     // <- only if using TCP
-    }
+
+    if (std::cin.eof()) graceful_exit(); // ctrl+d
 }
 
     /**

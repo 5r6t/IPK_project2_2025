@@ -38,6 +38,7 @@ class Client_Session {
         void auth(const std::vector<std::string>& args);   // sends auth request
         void join(const std::vector<std::string>& args);   // sends join rqst
         void rename(const std::vector<std::string>& args); // sends rename rqst
+        static void graceful_exit();
         
         enum class ClientState {
             Start,

@@ -4,7 +4,6 @@
  * @date 5-4-2025
  * Author: Jaroslav Mervart, xmervaj00
 */
-
 #pragma once
 
 #include "client_init.h"
@@ -31,14 +30,20 @@ class Client_Session {
         void run();
 
     private:
-        
-        void print_local_help();
-        void handle_command(const std::string& line);
+        static Client_Session* active_instance;
+        const Client_Init &config;
+
+        std::string protocol;
+        int sockfd = -1;
+        std::string display_name;
+
         void handle_chat_msg(const std::string& line);
+        void handle_command(const std::string& line);
+
+        void print_local_help();
         void auth(const std::vector<std::string>& args);   // sends auth request
         void join(const std::vector<std::string>& args);   // sends join rqst
         void rename(const std::vector<std::string>& args); // sends rename rqst
-        static void graceful_exit();
         
         enum class ClientState {
             Start,
@@ -51,13 +56,7 @@ class Client_Session {
 
         enum msg_param {MessageID, Username, ChannelID, Secret, DisplayName, MessageContent};
         bool check_message_content(const std::string &content, msg_param param);
-        
-        static void handle_sigint(int);
-            
-        int sockfd = -1;
-        std::string display_name;
-        bool is_authenticated = false;
-        
 
-        const Client_Init &config;
+        static void handle_sigint(int);
+        void graceful_exit();
 };

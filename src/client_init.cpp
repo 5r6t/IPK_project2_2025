@@ -30,7 +30,7 @@ void Client_Init::set_ip(std::string host) {
     hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
 
     if (getaddrinfo(host.c_str(), nullptr, &hints, &result) != 0) {
-        std::cerr << "Error: Unable to resolve domain name: " << host << std::endl;
+        std::cerr << "Error: Unable to resolve domain name: " << host << "\n";
         exit(ERR_INVALID);
     }
     for (next = result; next != nullptr; next = next->ai_next) { // Loop through getaddrinfo results
@@ -85,5 +85,4 @@ void Client_Init::validate() {
     printf_debug("Port:      %u", port);
     printf_debug("Timeout:   %u ms", timeout);
     printf_debug("Retries:   %u", retries);
-
 }

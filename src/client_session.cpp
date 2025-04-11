@@ -7,7 +7,12 @@
 #include "client_session.h"
 #include "tools.h"
 
-Client_Session::Client_Session(const Client_Init &config) : config(config) {}
+Client_Session* Client_Session::active_instance = nullptr;
+
+Client_Session::Client_Session(const Client_Init &config)
+    : config(config), protocol(config.get_protocol()) {
+        active_instance = this;
+};
 
 void Client_Session::print_local_help() {
     std::cout << "-----------------------------------------\n"
@@ -16,29 +21,29 @@ void Client_Session::print_local_help() {
               << "  /join <channel>\n"
               << "  /rename <displayname>\n"
               << "  /help\n"
-              << "Current display name: " << this->display_name << std::endl
+              << "Status:\n"
+              << "  Current display name: " << this->display_name << "\n"
+              << "  Authenticated: " << (this->state == ClientState::Open ? "true" : "false") << "\n"
               << "-----------------------------------------\n";
 }
 
 std::atomic<bool>stop_requested= false;
 
 void Client_Session::handle_sigint(int) {
-    //stop_requested = true;
-    graceful_exit(); // avoid getline blocking ctrl+c
+    stop_requested = true;
+    if (active_instance) {
+        active_instance->graceful_exit(); // now you can access non-static members!
+    }
 }
 
 void Client_Session::graceful_exit() {
-    printf_debug("%s", "Graceful shutdown requested.");
-    
-    //if (/* socket open & authenticated */) {
-        // send BYE message here }
-
-    // close socket if open
-    // set state = ClientState::End;
-    
-    exit(0); // final termination
+    if (this->protocol == "tcp") {
+        printf_debug("%s", " TCP shutdown requested.");
+    } else { // udp
+        printf_debug("%s", "UDP shutdown requested.");
+    }
+    exit(0);
 }
-
 
 void Client_Session::run() {
     std::signal(SIGINT, handle_sigint);
@@ -84,6 +89,15 @@ void Client_Session::run() {
      *              (join) -- server: *REPLY    -> client: _   --- (open)
      *              (join) -- server: ERR, BYE  -> client: _   --- ((end))
      */
+void Client_Session::handle_chat_msg(const std::string &line) {
+    printf_debug("%s", line.c_str());
+    if (this->state != ClientState::Open) {
+        std::cerr << "Error: To send a message, you must first authenticate. See '/help'\n";
+        return;
+    }
+    printf_debug("NOT sending MSG %s ...", line.c_str());
+    
+}
 
 void Client_Session::handle_command(const std::string &line) {
     printf_debug("%s", line.c_str());
@@ -107,7 +121,7 @@ void Client_Session::handle_command(const std::string &line) {
     } else if (command == "/help") {
         print_local_help();
     } else {
-        std::cerr << "Error: Invalid command. Get some /help.\n";
+        std::cerr << "Error: Invalid command. Get some '/help'.\n";
     }
 }
 
@@ -145,6 +159,7 @@ void Client_Session::join(const std::vector<std::string>& args) {
     this->state = ClientState::Join;
 
     printf_debug("NOT JOINing channel %s ...", args.at(0).c_str());
+    this->state = ClientState::Open;
 }
 
 void Client_Session::rename(const std::vector<std::string>& args) {
@@ -156,15 +171,7 @@ void Client_Session::rename(const std::vector<std::string>& args) {
     printf_debug("Changed DisplayName to '%s'", this->display_name.c_str()); 
 }
 
-void Client_Session::handle_chat_msg(const std::string &line) {
-    printf_debug("%s", line.c_str());
-    if (this->state != ClientState::Open) {
-        std::cerr << "Error: To send a message, you must first authenticate.\n";
-        return;
-    }
-    printf_debug("NOT sending MSG %s ...", line.c_str());
 
-}
 
 bool Client_Session::check_message_content(const std::string &content, msg_param param) {
     switch (param)

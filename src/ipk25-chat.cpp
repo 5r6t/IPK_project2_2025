@@ -19,7 +19,7 @@
         if (i + 1 < argc && !params.contains(argv[i + 1])) {
             return argv[++i];
         }
-        std::cerr << "Error: Missing argument for " << flag << std::endl;
+        std::cerr << "Error: Missing argument for " << flag << "\n";
         exit(ERR_MISSING);
     };
 

@@ -32,10 +32,17 @@ class Client_Session {
     private:
         static Client_Session* active_instance;
         const Client_Init &config;
-
-        std::string protocol;
-        int sockfd = -1;
+        int client_socket = -1;
         std::string display_name;
+        enum msg_param {MessageID, Username, ChannelID, Secret, DisplayName, MessageContent};
+        enum class ClientState {
+            Start,
+            Auth,
+            Open,
+            Join
+            // End
+        };
+        ClientState state = ClientState::Start;
 
         void handle_chat_msg(const std::string& line);
         void handle_command(const std::string& line);
@@ -45,18 +52,14 @@ class Client_Session {
         void join(const std::vector<std::string>& args);   // sends join rqst
         void rename(const std::vector<std::string>& args); // sends rename rqst
         
-        enum class ClientState {
-            Start,
-            Auth,
-            Open,
-            Join,
-            End
-        };
-        ClientState state = ClientState::Start;
-
-        enum msg_param {MessageID, Username, ChannelID, Secret, DisplayName, MessageContent};
         bool check_message_content(const std::string &content, msg_param param);
 
         static void handle_sigint(int);
         void graceful_exit();
+
+        // NTWRK
+        void connect_tcp();
+        void send_message(const std::string &msg); // just to select appropriate protocol
+        void send_tcp_message(const std::string &msg);
+        void send_udp_message(const std::string &msg);
 };

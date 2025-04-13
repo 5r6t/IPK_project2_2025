@@ -18,4 +18,6 @@
 * https://man7.org/linux/man-pages/man2/select_tut.2.html
 
 # Conclusion
-This document essentially does not advance the state of human knowledge in any way, shape or form. It is irrelevant, hopeless, not worth caring for. Don't deny. It's true. I am tired of all this.
+This document essentially does not advance the state of human knowledge in any way. I hope one day I'll have saved enough to isolate myself in the mountains.  You can't be hopeless if no one gives you hope.
+
+Todays song: Instant Crush (feat. Julian Casablancas) - Daft Punk

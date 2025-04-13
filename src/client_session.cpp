@@ -31,7 +31,7 @@ void Client_Session::print_local_help() {
 }
 
 void Client_Session::handle_sigint(int) {
-    //stop_requested = true;
+    stop_requested = true;
     if (active_instance) {
         active_instance->graceful_exit();
     }
@@ -39,19 +39,20 @@ void Client_Session::handle_sigint(int) {
 
 void Client_Session::graceful_exit() {
     printf_debug("%s", "Gracefuly exiting...");
+
     if (config.get_protocol() == "tcp") {
         std::string bye_msg = "BYE FROM " + this->display_name + "\r\n";
         send_message(bye_msg);
     } else { // udp
         printf_debug("%s", "UDP shutdown requested.");
     }
+
     close(client_socket);
     exit(0);
 }
 
 void Client_Session::run(){
     fd_set rfds;
-    char input_buffer[BUFFER_SIZE];
     std::string cmd_buffer;
 
     std::signal(SIGINT, handle_sigint);
@@ -88,6 +89,7 @@ void Client_Session::run(){
             std::string msg = receive_message();
             handle_server_message(msg);
         }
+        
         if (stop_requested) break;
     }
 }
@@ -146,9 +148,9 @@ void Client_Session::handle_command(const std::string &line) {
     }
 
     if (command == "/auth") {
-        auth(args);
+        send_auth(args);
     } else if (command == "/join") {
-        join(args);
+        send_join(args);
     } else if (command == "/rename") {
         rename(args);
     } else if (command == "/help") {
@@ -158,7 +160,7 @@ void Client_Session::handle_command(const std::string &line) {
     }
 }
 
-void Client_Session::auth(const std::vector<std::string>& args) {
+void Client_Session::send_auth(const std::vector<std::string>& args) {
     if (this->state != ClientState::Start) {
         std::cerr << "Error: Cannot authenticate again.\n";
         return;
@@ -174,34 +176,22 @@ void Client_Session::auth(const std::vector<std::string>& args) {
     auto secret = args.at(1);
     rename(std::vector<std::string>{args[2]});
 
-    if (config.get_protocol() == "tcp") {
-        // AUTH {Username} AS {DisplayName} USING {Secret}\r\n
-    
-        if (check_message_content(username, Username) && check_message_content(secret, Secret)) {
-            auto auth_msg = "AUTH " + username + " AS " + this->display_name + " USING " + secret + "\r\n"; 
-            send_message(auth_msg);
-        } else {
-            std::cerr << "Error: Invalid ChannelID format.\n";
-        }
-        std::string confirmation = receive_message();
-        if (confirmation.starts_with("REPLY OK IS ")) {
-            std::cout << "Action Success: " << confirmation << "\n";
-            this->state = ClientState::Open;
-        } else if (confirmation.starts_with("REPLY NOK IS ")) {
-            std::cout << "Action Failure: Invalid credentials, please try again\n";
-            this->state = ClientState::Start; // does not trully adhere to specified fsm, for simplicity
-        } else { // err, bye | msg from server
-            std::cerr << confirmation;
-            std::cerr << "Error: Server side error occured.\n";
-            graceful_exit(); // does not differentiate between err,bye | msg for now
-        }
-    } else { // udp
-
+    if (!check_message_content(username, Username) || !check_message_content(secret, Secret)) {
+        std::cerr << "Error: Invalid Username/Secret format.\n";
+        this->state = ClientState::Open;
+        return;
     }
 
+    if (config.get_protocol() == "tcp") {
+        // AUTH {Username} AS {DisplayName} USING {Secret}\r\n
+        auto auth_msg = "AUTH " + username + " AS " + this->display_name + " USING " + secret + "\r\n"; 
+        send_message(auth_msg);
+    } else {
+        /* UDP - too different */
+    }
 }
 
-void Client_Session::join(const std::vector<std::string>& args) {
+void Client_Session::send_join(const std::vector<std::string>& args) {
     if (this->state != ClientState::Open) {
         std::cerr << "Error: To join a channel, you first must authenticate.\n";
         return;
@@ -213,14 +203,12 @@ void Client_Session::join(const std::vector<std::string>& args) {
 
     this->state = ClientState::Join;
     if (check_message_content(args.at(0), ChannelID)) {
-    // JOIN {ChannelID} AS {DisplayName}\r\n
+        // JOIN {ChannelID} AS {DisplayName}\r\n
         auto join_msg = "JOIN " + args.at(0) + " AS " + this->display_name + "\r\n";
         send_message(join_msg);        
     } else {
         std::cerr << "Error: Invalid ChannelID format, try again.\n";
     }
-
-    this->state = ClientState::Open;
 }
 
 void Client_Session::rename(const std::vector<std::string>& args) {
@@ -315,39 +303,118 @@ void Client_Session::send_udp_message(const std::string &msg) {
 }
 // 010101010101010101001010010100101010010101001010100101010010100101010100101001010101011001010101101001010101
 std::string Client_Session::receive_message() {
-    char buffer[BUFFER_SIZE];
-
-    int bytes_rx = recv(client_socket, buffer, BUFFER_SIZE, 0);
-    if (bytes_rx < 0) {
-        perror("ERROR: recv");
-        return "";
+    std::string msg;
+    if(config.get_protocol() == "tcp") {
+        msg = receive_tcp_message();
+    } else {
+        /* udp */
+        msg = "Error: Not implemented.";
     }
-    buffer[bytes_rx] = '\0';
-    return std::string(buffer);
+    return msg;
 }
 
-void Client_Session::recv_loop() {
-    std::string tcp_buffer;
-
-    while (true) { //
-        char temp[BUFFER_SIZE];
-        ssize_t bytes = recv(this->client_socket, temp, BUFFER_SIZE - 1, 0);
-        if (bytes <= 0) break;
-
-        temp[bytes] = '\0';
-        tcp_buffer += temp;
-
-        while (true) {
-            size_t pos = tcp_buffer.find("\r\n");
-            if (pos == std::string::npos) break;
-
+std::string Client_Session::receive_tcp_message() {
+    while (true) {
+        size_t pos = this->tcp_buffer.find("\r\n");
+        if (pos != std::string::npos) {
             std::string msg = tcp_buffer.substr(0, pos);
             tcp_buffer.erase(0, pos + 2);
-            handle_server_message(msg);
+            return msg;
         }
+        receive_tcp_chunk();
     }
+}
+
+void Client_Session::receive_tcp_chunk() {
+    printf_debug("%s", "Getting another TCP message chunk.");
+    char temp[BUFFER_SIZE];
+    int bytes_rx = recv(client_socket, temp, BUFFER_SIZE - 1, 0);
+    if (bytes_rx < 0) {
+        perror("ERROR: recv");
+        return;
+    }
+    temp[bytes_rx] = '\0';
+    this->tcp_buffer += temp; // Add another chunk
 }
 
 void Client_Session::handle_server_message(std::string &msg) {
-    std::cout << msg << "\n";
+    ParsedMessage parsed = parse_message(msg);
+
+    switch (this->state) {
+        case ClientState::Auth:
+            if (parsed.type == "REPLY OK") {
+                std::cout << "Action Success: " << parsed.content << "\n";
+                this->state = ClientState::Open;
+            } else if (parsed.type == "REPLY NOK") {
+                std::cout << "Action Failure: " << parsed.content << "\n";
+                this->state = ClientState::Start;
+            } else {
+                std::cerr << "ERROR: Unexpected message in AUTH state: " << msg << "\n";
+                graceful_exit();
+            }
+            break;
+
+        case ClientState::Open:
+            if (parsed.type == "REPLY OK" || parsed.type == "REPLY NOK") {
+                std::cerr << "ERROR: Unexpected REPLY in OPEN state: " << parsed.content << "\n";
+                graceful_exit();
+            }
+            // fall through is desired here - REPLY (N)OK is either handled or the rest is similar. for now...
+        case ClientState::Join:
+            if (parsed.type == "MSG") {
+                std::cout << parsed.display_name << ": " << parsed.content << "\n";
+            } else if (parsed.type == "REPLY OK" || parsed.type == "REPLY NOK") {
+                std::cout << (parsed.type == "REPLY OK" ? "Action Success: " : "Action Failure: ") << parsed.content << "\n";
+                this->state = ClientState::Open;
+
+            } else if (parsed.type == "ERR") {
+                std::cout << "ERROR FROM " << parsed.display_name << ": " << parsed.content << "\n";
+                graceful_exit();
+            } else if (parsed.type == "BYE") {
+                std::cout << "ERROR FROM " << parsed.display_name << ": session ended\n";
+                graceful_exit();
+            } else {
+                std::cerr << "ERROR: Unexpected message in OPEN/JOIN state: " << msg << "\n";
+            }
+            break;
+
+        case ClientState::Start:
+        default:
+            std::cerr << "ERROR: Message received in invalid client state: " << msg << "\n";
+            break;
+    }
+}
+
+
+Client_Session::ParsedMessage Client_Session::parse_message(const std::string &msg) {
+    ParsedMessage result;
+
+    if (msg.starts_with("REPLY OK IS ")) {
+        result.type = "REPLY OK";
+        result.content = msg.substr(strlen("REPLY OK IS "));
+    } else if (msg.starts_with("REPLY NOK IS ")) {
+        result.type = "REPLY NOK";
+        result.content = msg.substr(strlen("REPLY NOK IS "));
+    } else if (msg.starts_with("MSG FROM ")) {
+        result.type = "MSG";
+        size_t from_pos = strlen("MSG FROM ");
+        size_t is_pos = msg.find(" IS ", from_pos);
+        if (is_pos != std::string::npos) {
+            result.display_name = msg.substr(from_pos, is_pos - from_pos);
+            result.content = msg.substr(is_pos + 4);
+        }
+    } else if (msg.starts_with("ERR FROM ")) {
+        result.type = "ERR";
+        size_t from_pos = strlen("ERR FROM ");
+        size_t is_pos = msg.find(" IS ", from_pos);
+        if (is_pos != std::string::npos) {
+            result.display_name = msg.substr(from_pos, is_pos - from_pos);
+            result.content = msg.substr(is_pos + 4);
+        }
+    } else if (msg.starts_with("BYE FROM ")) {
+        result.type = "BYE";
+        result.display_name = msg.substr(strlen("BYE FROM "));
+    }
+
+    return result;
 }

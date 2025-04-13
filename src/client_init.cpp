@@ -1,10 +1,10 @@
-
 /**
  * @file client_init.cpp
  * @brief IPK project 2 - Chat client
- * @date 5-4-2025
+ * @date 13-4-2025
  * Author: Jaroslav Mervart, xmervaj00
- */
+*/
+
 #include "client_init.h"
 #include "tools.h"
 

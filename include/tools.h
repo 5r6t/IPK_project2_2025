@@ -1,3 +1,10 @@
+/**
+ * @file tools.h 
+ * @brief IPK project 2 - Client for a chat server
+ * @date 13-4-2025
+ * Author: Jaroslav Mervart, xmervaj00
+*/
+
 #pragma once
 
 #include <string>
@@ -19,7 +26,7 @@
 class Toolkit
 {
     private:
-        /* data */
+        // nothing so far
     public:
         static int catch_stoi(const std::string &str, int size, const std::string &flag);
         static bool only_allowed_chars(const std::string &str, const std::string &regex);

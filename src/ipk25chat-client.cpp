@@ -1,9 +1,9 @@
 /**
- * @file ipk-l4-scan.cpp
- * @brief IPK project 1 - Layer 4 scanner
+ * @file ipk25chat-client.cpp
+ * @brief IPK project 2 - Client for a chat server
  * @date 5-4-2025
  * Author: Jaroslav Mervart, xmervaj00
- */
+*/
 
 #include "tools.h"
 #include "client_init.h"
@@ -51,7 +51,7 @@
 
     config.validate();
     Client_Session session(config);
-    session.run();
-
+    //session.run();
+    session.session();
     return 0;
 }

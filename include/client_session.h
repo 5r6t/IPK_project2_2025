@@ -1,9 +1,10 @@
 /**
  * @file client_session.h
- * @brief IPK project 2 - Chat client
- * @date 5-4-2025
+ * @brief IPK project 2 - Client for a chat server
+ * @date 13-4-2025
  * Author: Jaroslav Mervart, xmervaj00
 */
+
 #pragma once
 
 #include "client_init.h"
@@ -22,6 +23,8 @@
 #include <csignal>
 #include <atomic>
 
+#define BUFFER_SIZE 65536 // 64kb is 2^16 + 4
+
 extern std::atomic<bool> stop_requested; 
 
 class Client_Session {
@@ -32,6 +35,7 @@ class Client_Session {
     private:
         static Client_Session* active_instance;
         const Client_Init &config;
+
         int client_socket = -1;
         std::string display_name;
         enum msg_param {MessageID, Username, ChannelID, Secret, DisplayName, MessageContent};
@@ -42,7 +46,7 @@ class Client_Session {
             Join
             // End
         };
-        ClientState state = ClientState::Start;
+        ClientState state;
 
         void handle_chat_msg(const std::string& line);
         void handle_command(const std::string& line);
@@ -59,7 +63,15 @@ class Client_Session {
 
         // NTWRK
         void connect_tcp();
+        
         void send_message(const std::string &msg); // just to select appropriate protocol
         void send_tcp_message(const std::string &msg);
         void send_udp_message(const std::string &msg);
+        
+        
+        std::string receive_message();
+        void handle_server_message(std::string &msg);
+
+
+        void recv_loop();
 };

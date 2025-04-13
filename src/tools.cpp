@@ -1,3 +1,10 @@
+/**
+ * @file tools.cpp 
+ * @brief IPK project 2 - Client for a chat server
+ * @date 13-4-2025
+ * Author: Jaroslav Mervart, xmervaj00
+*/
+
 #include "tools.h"
 
 int Toolkit::catch_stoi(const std::string &str, int size, const std::string &flag) {

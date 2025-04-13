@@ -8,7 +8,7 @@ LDFLAGS = -lpcap -lpthread
 SRC_DIR = src
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
 OBJS = $(SRCS:.cpp=.o)
-TARGET = ipk25-chat
+TARGET = ipk25chat-client
 
 all: $(TARGET)
 
@@ -16,7 +16,8 @@ all: $(TARGET)
 # Clean up object files after linking
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS) 
-	rm -f $(OBJS)
+
+#rm -f $(OBJS)
 
 # Compile source files into object files
 $(SRC_DIR)/%.o: $(SRC_DIR)/%.cpp

@@ -35,4 +35,3 @@ bool Toolkit::only_printable_chars(const std::string &str, bool allow_space_and_
         return std::regex_match(str, pattern);
     }
 }
-

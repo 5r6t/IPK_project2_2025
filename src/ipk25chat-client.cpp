@@ -1,7 +1,7 @@
 /**
  * @file ipk25chat-client.cpp
  * @brief IPK project 2 - Client for a chat server
- * @date 5-4-2025
+ * @date 13-4-2025
  * Author: Jaroslav Mervart, xmervaj00
 */
 

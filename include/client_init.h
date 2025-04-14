@@ -31,8 +31,8 @@ class Client_Init {
         uint8_t get_retries() const;
 
     private:
-        std::string protocol;
-        std::string ip;
+        std::string protocol = "";
+        std::string ip = "";
         uint16_t port = 4567;
         uint16_t timeout = 250;
         uint8_t retries = 3;

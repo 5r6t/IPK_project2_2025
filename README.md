@@ -1,7 +1,7 @@
 # IPK_project_dos
 
-[assignment](https://git.fit.vutbr.cz/NESFIT/IPK-Projects/src/branch/master/Project_2/README.md)
-[project_repo]()
+- [assignment](https://git.fit.vutbr.cz/NESFIT/IPK-Projects/src/branch/master/Project_2/README.md)
+- [project_repo](https://git.fit.vutbr.cz/xmervaj00/IPK_project_dos)
 
 ## Sources
 * https://man7.org/linux/man-pages/man3/sockaddr.3type.html
@@ -17,7 +17,28 @@
 * https://man7.org/linux/man-pages/man2/select.2.html
 * https://man7.org/linux/man-pages/man2/select_tut.2.html
 
-# Conclusion
-This document essentially does not advance the state of human knowledge in any way. I hope one day I'll have saved enough to isolate myself in the mountains.  You can't be hopeless if no one gives you hope.
+# Legend
+```c#
+/**
+ * init: gets constructed from
+ * data: supplies configuration values
+ * uses: functions supplied by said class
+*/
 
-Todays song: Instant Crush (feat. Julian Casablancas) - Daft Punk
+                     [ ipk25chat-client ]
+                              ║ 
+        ╔═══ (init+data) ═════╩══════ (init) ═════════╗
+        ║                                             ║ 
+        ║                                             ║
+  [ Client Config ] ═════════ (data) ═════════> [ Client Session ]
+        ║                                             ║  ║
+        ║                                             ║  ║
+        ╚══ (uses) ════> [ Toolkit ] <════ (uses) ════╝  ║
+                                                         ║
+        [ Client Comms ] <══════ (init+data+uses) ═══════╝
+```
+
+# Conclusion
+This document essentially does not advance the state of human knowledge in any way. I hope one day I'll have saved enough to isolate myself in the mountains. But all I do is run for cover...
+
+Todays song: Mercy - Dotan

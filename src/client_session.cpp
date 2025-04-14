@@ -12,8 +12,10 @@ Client_Session* Client_Session::active_instance = nullptr;
 
 Client_Session::Client_Session(const Client_Init &config)
     : config(config) {
-        active_instance = this;
-};
+    active_instance = this;
+    this->comms = std::make_unique<Client_Comms>(
+        config.get_ip(), config.get_port());
+}
 
 extern std::atomic<bool> stop_requested = false;
 
@@ -38,31 +40,27 @@ void Client_Session::handle_sigint(int) {
 }
 
 void Client_Session::graceful_exit() {
-    printf_debug("%s", "Gracefuly exiting...");
-
     if (config.get_protocol() == "tcp") {
         std::string bye_msg = "BYE FROM " + this->display_name + "\r\n";
-        send_message(bye_msg);
-    } else { // udp
-        printf_debug("%s", "UDP shutdown requested.");
+        comms->send_tcp_message(bye_msg);
     }
 
-    close(client_socket);
-    exit(0);
+    comms->shutdown();  // closes socket and exits
 }
+
 
 void Client_Session::run(){
     fd_set rfds;
     std::string cmd_buffer;
 
     std::signal(SIGINT, handle_sigint);
-    connect_tcp();
+    comms->connect_tcp();
     this->state = ClientState::Start;
 
     while(true) {
         FD_ZERO(&rfds);
         FD_SET(STDIN_FILENO, &rfds);
-        FD_SET(this->client_socket, &rfds);
+        FD_SET(comms->get_socket(), &rfds);
         int max_fd = std::max(STDIN_FILENO, client_socket) + 1;
         int active = select(max_fd, &rfds, nullptr, nullptr, nullptr);
         
@@ -81,6 +79,7 @@ void Client_Session::run(){
             if (cmd_buffer[0] == '/') {
                 handle_command(cmd_buffer);
             } else {
+                
                 handle_chat_msg(cmd_buffer);
             }
         }
@@ -121,7 +120,7 @@ void Client_Session::run(){
      */
 void Client_Session::handle_chat_msg(const std::string &line) {
     if (this->state != ClientState::Open) {
-        std::cerr << "Error: To send a message, you must first authenticate. See '/help'\n";
+        std::cout << "ERROR: You must authenticate first. See '/help'.\n";
         return;
     }
     if (check_message_content(line, MessageContent)) {
@@ -130,7 +129,7 @@ void Client_Session::handle_chat_msg(const std::string &line) {
         std::string msg = "MSG FROM " + this->display_name + " IS " + line + "\r\n";
         send_message(msg);    
     } else {
-        std::cerr << "Error: Invalid format of MessageContent, try again.\n";
+        std::cout << "ERROR: Invalid format of MessageContent, try again.\n";
     }
 }
 
@@ -156,17 +155,17 @@ void Client_Session::handle_command(const std::string &line) {
     } else if (command == "/help") {
         print_local_help();
     } else {
-        std::cerr << "Error: Invalid command. Get some '/help'.\n";
+        std::cout << "ERROR: Invalid command. Get some '/help'.\n";
     }
 }
 
 void Client_Session::send_auth(const std::vector<std::string>& args) {
     if (this->state != ClientState::Start) {
-        std::cerr << "Error: Cannot authenticate again.\n";
+        std::cout << "ERROR: Cannot authenticate again.\n";
         return;
     }
-    if ( !(args.size() == 3)) {
-        std::cerr << "Error: Missing arguments, try again.\n";
+    if (args.size() != 3) {
+        std::cout << "ERROR: Missing arguments, try again.\n";
         return;
     }
 
@@ -177,7 +176,7 @@ void Client_Session::send_auth(const std::vector<std::string>& args) {
     rename(std::vector<std::string>{args[2]});
 
     if (!check_message_content(username, Username) || !check_message_content(secret, Secret)) {
-        std::cerr << "Error: Invalid Username/Secret format.\n";
+        std::cout << "ERROR: Invalid Username/Secret format.\n";
         this->state = ClientState::Open;
         return;
     }
@@ -193,11 +192,11 @@ void Client_Session::send_auth(const std::vector<std::string>& args) {
 
 void Client_Session::send_join(const std::vector<std::string>& args) {
     if (this->state != ClientState::Open) {
-        std::cerr << "Error: To join a channel, you first must authenticate.\n";
+        std::cout << "ERROR: To join a channel, you first must authenticate.\n";
         return;
     }
-    if ( !(args.size() == 1) || args.at(0).size() > 20) {
-        std::cerr << "Error: No or invalid ChannelID, try again.\n";
+    if (args.size() != 1) {
+        std::cout << "ERROR: No ChannelID, try again.\n";
         return;
     }
 
@@ -207,20 +206,20 @@ void Client_Session::send_join(const std::vector<std::string>& args) {
         auto join_msg = "JOIN " + args.at(0) + " AS " + this->display_name + "\r\n";
         send_message(join_msg);        
     } else {
-        std::cerr << "Error: Invalid ChannelID format, try again.\n";
+        std::cout << "ERROR: Invalid ChannelID format, try again.\n";
     }
 }
 
 void Client_Session::rename(const std::vector<std::string>& args) {
     if ( !(args.size() == 1)) {
-        std::cerr << "Error: No or multiple usernames selected, try again.\n";
+        std::cout << "ERROR: No or multiple usernames selected, try again.\n";
         return;
     }
     if (check_message_content(args.at(0), DisplayName)) {
         this->display_name = args.at(0);
         printf_debug("Changed DisplayName to '%s'", this->display_name.c_str()); 
     } else {
-        std::cerr << "Error: Invalid DisplayName format, try again.\n";
+        std::cout << "ERROR: Invalid DisplayName format, try again.\n";
     }
 }
 
@@ -250,40 +249,14 @@ bool Client_Session::check_message_content(const std::string &content, msg_param
     }
 }
 
-void Client_Session::connect_tcp() {
-    int family = AF_INET;
-    int type = SOCK_STREAM;
-    int protocol = IPPROTO_TCP;
-    auto port = config.get_port();
-    auto ipv4_address = config.get_ip();
-    this->client_socket = socket(family, type, protocol);
 
-    struct sockaddr_in server_addr {};
-        server_addr.sin_family = AF_INET;
-        server_addr.sin_port = htons(port); // port from config
-        inet_pton(AF_INET, ipv4_address.c_str(), &server_addr.sin_addr);
-        
-    socklen_t address_size = sizeof(server_addr);
-    struct sockaddr *address = (struct sockaddr*)&server_addr;
-    
-    
-    if (this->client_socket <= 0) {
-        std::cerr << "Error: Cannot create TCP socket\n";  
-        graceful_exit();
-    }
-
-    if  (connect(this->client_socket, address, address_size) != 0) {
-        std::cerr << "Error: Cannot connect\n";
-        graceful_exit();
-    }
-    printf_debug("%s", "TCP Connected succesfully");
-}
 
 void Client_Session::send_message(const std::string &msg) {
     if (config.get_protocol() == "tcp") {
-        send_tcp_message(msg);
+        printf_debug("About to send %s", msg.c_str());
+        comms->send_tcp_message(msg);
     } else {
-        send_udp_message(msg);
+        comms->send_udp_message(msg);
     }
 }
 
@@ -292,23 +265,18 @@ void Client_Session::send_tcp_message(const std::string &msg) {
     int bytes_tx = send(this->client_socket, msg.c_str(), strlen(msg.c_str()), 0);
     if (bytes_tx < 0) {
         //perror("ERROR: send");
-        std::cerr << "Error: Cannot send message: " << msg << "\n";
+        std::cerr << "ERROR: Cannot send message: " << msg << "\n";
         return;
     }
 }
 
-void Client_Session::send_udp_message(const std::string &msg) {
-    printf_debug("%s", "Not implemented yet!");
-    return;
-}
-// 010101010101010101001010010100101010010101001010100101010010100101010100101001010101011001010101101001010101
 std::string Client_Session::receive_message() {
     std::string msg;
     if(config.get_protocol() == "tcp") {
         msg = receive_tcp_message();
     } else {
         /* udp */
-        msg = "Error: Not implemented.";
+        msg = "ERROR: Not implemented.";
     }
     return msg;
 }
@@ -333,6 +301,10 @@ void Client_Session::receive_tcp_chunk() {
         perror("ERROR: recv");
         return;
     }
+    if (bytes_rx == 0) {
+        std::cerr << "ERROR: Server has closed the connection\n.";
+        graceful_exit();
+    }
     temp[bytes_rx] = '\0';
     this->tcp_buffer += temp; // Add another chunk
 }
@@ -348,15 +320,18 @@ void Client_Session::handle_server_message(std::string &msg) {
             } else if (parsed.type == "REPLY NOK") {
                 std::cout << "Action Failure: " << parsed.content << "\n";
                 this->state = ClientState::Start;
+            } else if (parsed.type == "ERR") {
+                std::cout << "ERROR FROM " << parsed.display_name << ": " << parsed.content << "\n";
+                graceful_exit();
             } else {
-                std::cerr << "ERROR: Unexpected message in AUTH state: " << msg << "\n";
+                std::cout << "ERROR: Unexpected message in AUTH state: " << msg << "\n";
                 graceful_exit();
             }
             break;
 
         case ClientState::Open:
             if (parsed.type == "REPLY OK" || parsed.type == "REPLY NOK") {
-                std::cerr << "ERROR: Unexpected REPLY in OPEN state: " << parsed.content << "\n";
+                std::cout << "ERROR: Unexpected REPLY received: " << parsed.content << "\n";
                 graceful_exit();
             }
             // fall through is desired here - REPLY (N)OK is either handled or the rest is similar. for now...
@@ -374,13 +349,16 @@ void Client_Session::handle_server_message(std::string &msg) {
                 std::cout << "ERROR FROM " << parsed.display_name << ": session ended\n";
                 graceful_exit();
             } else {
-                std::cerr << "ERROR: Unexpected message in OPEN/JOIN state: " << msg << "\n";
+                std::cout << "ERROR: Unexpected message received: " << msg << "\n";
+                std::string err = "ERR FROM " + this->display_name + " IS invalid message\r\n";
+                send_message(err);
+                graceful_exit();
             }
             break;
 
         case ClientState::Start:
         default:
-            std::cerr << "ERROR: Message received in invalid client state: " << msg << "\n";
+            std::cout << "ERROR: Message received in invalid client state: " << msg << "\n";
             break;
     }
 }
@@ -388,6 +366,7 @@ void Client_Session::handle_server_message(std::string &msg) {
 
 Client_Session::ParsedMessage Client_Session::parse_message(const std::string &msg) {
     ParsedMessage result;
+    printf_debug("%s", msg.c_str());
 
     if (msg.starts_with("REPLY OK IS ")) {
         result.type = "REPLY OK";

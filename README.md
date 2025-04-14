@@ -17,9 +17,10 @@
 * https://man7.org/linux/man-pages/man2/select.2.html
 * https://man7.org/linux/man-pages/man2/select_tut.2.html
 
-# Legend
-```c#
+## Architecture Overview 
+```ini
 /**
+ * Legend
  * init: gets constructed from
  * data: supplies configuration values
  * uses: functions supplied by said class

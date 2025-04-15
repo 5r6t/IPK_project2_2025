@@ -17,11 +17,11 @@
 * https://man7.org/linux/man-pages/man2/select.2.html
 * https://man7.org/linux/man-pages/man2/select_tut.2.html
 
-* https://www.oreilly.com/library/view/hands-on-network-programming/9781789349863/8e8ea0c3-cf7f-46c0-bd6f-5c7aa6eaa366.xhtml
-* https://pubs.opengroup.org/onlinepubs/000095399/functions/setsockopt.html
+* https://www.oreilly.com/library/view/hands-on-network-programming/9781789349863/8e8ea0c3-cf7f-46c0-bd6f-5c7aa6eaa366.xhtml -- timeout
+* https://pubs.opengroup.org/onlinepubs/000095399/functions/setsockopt.html -- decided to not use
 
-# Legend
-```c#
+## Architecture Overview 
+```ini
 /**
  * Legend
  * init: gets constructed from

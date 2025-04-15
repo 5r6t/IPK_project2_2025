@@ -1,7 +1,7 @@
 /**
  * @file client_session.cpp
  * @brief IPK project 2 - Chat client
- * @date 14-4-2025
+ * @date 15-4-2025
  * Author: Jaroslav Mervart, xmervaj00
 */
 
@@ -39,12 +39,12 @@ void Client_Session::handle_sigint(int) {
     }
 }
 
-void Client_Session::graceful_exit() {
+void Client_Session::graceful_exit(int ex_code) {
     if (config.get_protocol() == "tcp") {
         std::string bye_msg = "BYE FROM " + this->display_name + "\r\n";
         comms->send_tcp_message(bye_msg);
     }
-    comms->terminate_connection();  // closes socket and exits
+    comms->terminate_connection(ex_code);  // closes socket and exits
 }
 
 
@@ -185,6 +185,16 @@ void Client_Session::send_auth(const std::vector<std::string>& args) {
     // AUTH {Username} AS {DisplayName} USING {Secret}\r\n
     auto auth_msg = "AUTH " + username + " AS " + this->display_name + " USING " + secret + "\r\n"; 
     send_message(auth_msg); 
+
+    auto reply = comms->expect_reply(5000);
+    if (!reply) {
+        std::cout << "ERROR: Authentication timed out.\n";
+        graceful_exit();
+        return;
+    }
+
+    std::string confirmation = *reply;
+    handle_server_message(confirmation);
 }
 
 void Client_Session::send_join(const std::vector<std::string>& args) {
@@ -205,6 +215,15 @@ void Client_Session::send_join(const std::vector<std::string>& args) {
     } else {
         std::cout << "ERROR: Invalid ChannelID format, try again.\n";
     }
+    auto reply = comms->expect_reply(5000);
+    if (!reply) {
+        std::cout << "ERROR: Authentication timed out.\n";
+        graceful_exit(ERR_TIMEOUT);
+        return;
+    }
+
+    std::string confirmation = *reply;
+    handle_server_message(confirmation);
 }
 
 void Client_Session::rename(const std::vector<std::string>& args) {
@@ -279,17 +298,17 @@ void Client_Session::handle_server_message(std::string &msg) {
                 this->state = ClientState::Start;
             } else if (parsed.type == "ERR") {
                 std::cout << "ERROR FROM " << parsed.display_name << ": " << parsed.content << "\n";
-                graceful_exit();
+                graceful_exit(ERR_SERVER);
             } else {
                 std::cout << "ERROR: Unexpected message in AUTH state: " << msg << "\n";
-                graceful_exit();
+                graceful_exit(ERR_SERVER);
             }
             break;
 
         case ClientState::Open:
             if (parsed.type == "REPLY OK" || parsed.type == "REPLY NOK") {
                 std::cout << "ERROR: Unexpected REPLY received: " << parsed.content << "\n";
-                graceful_exit();
+                graceful_exit(ERR_SERVER);
             }
             // fall through is desired here - REPLY (N)OK is either handled or the rest is similar.
         case ClientState::Join:
@@ -301,15 +320,15 @@ void Client_Session::handle_server_message(std::string &msg) {
 
             } else if (parsed.type == "ERR") {
                 std::cout << "ERROR FROM " << parsed.display_name << ": " << parsed.content << "\n";
-                graceful_exit();
+                graceful_exit(ERR_SERVER);
             } else if (parsed.type == "BYE") {
                 std::cout << "ERROR FROM " << parsed.display_name << ": session ended\n";
-                graceful_exit();
+                graceful_exit(ERR_SERVER);
             } else {
                 std::cout << "ERROR: Unexpected message received: " << msg << "\n";
                 std::string err = "ERR FROM " + this->display_name + " IS invalid message\r\n";
                 send_message(err);
-                graceful_exit();
+                graceful_exit(ERR_SERVER);
             }
             break;
 

@@ -1,7 +1,7 @@
 /**
  * @file tcp_comm.cpp
  * @brief IPK project 2 - Client for a chat server
- * @date 14-4-2025
+ * @date 15-4-2025
  * Author: Jaroslav Mervart, xmervaj00
 */
 
@@ -31,27 +31,42 @@ void Client_Comms::connect_tcp() {
     
     
     if (this->client_socket <= 0) {
-        std::cerr << "ERROR: Cannot create TCP socket\n";  
-        terminate_connection();
+        std::cout << "ERROR: Cannot create TCP socket\n";  
+        terminate_connection(ERR_INTERNAL);
     }
 
     if  (connect(this->client_socket, address, address_size) != 0) {
-        std::cerr << "ERROR: Cannot connect\n";
-        terminate_connection();
+        std::cout << "ERROR: Cannot connect\n";
+        terminate_connection(ERR_SERVER);
     }
     printf_debug("%s", "TCP Connected succesfully");
 }
 
-void Client_Comms::terminate_connection() {
+void Client_Comms::terminate_connection(int ex_code) {
     if (client_socket != -1) {
         close(client_socket);
     }
-    exit(0);
+    exit(ex_code);
 }
 
+std::optional<std::string> Client_Comms::expect_reply(int timeout_ms) {
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(client_socket, &rfds);
+
+    struct timeval tv;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+    int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
+    if (ready <= 0) {
+        return std::nullopt;
+    }
+
+    return receive_tcp_message(); 
+}
 
 void Client_Comms::send_tcp_message(const std::string &msg) {
-    // closed socket not handled for now
     int bytes_tx = send(this->client_socket, msg.c_str(), strlen(msg.c_str()), 0);
     if (bytes_tx < 0) {
         //perror("ERROR: send");
@@ -74,15 +89,17 @@ std::string Client_Comms::receive_tcp_message() {
 
 void Client_Comms::receive_tcp_chunk() {
     printf_debug("%s", "Getting another TCP message chunk.");
+
     char temp[BUFFER_SIZE];
     int bytes_rx = recv(client_socket, temp, BUFFER_SIZE - 1, 0);
+    
     if (bytes_rx < 0) {
         perror("ERROR: recv");
         return;
     }
     if (bytes_rx == 0) {
-        std::cerr << "ERROR: Server has closed the connection\n.";
-        terminate_connection();
+        std::cout << "ERROR: Server has closed the connection\n."; // no need to send BYE
+        terminate_connection(ERR_SERVER);
     }
     temp[bytes_rx] = '\0';
     this->tcp_buffer += temp; // Add another chunk

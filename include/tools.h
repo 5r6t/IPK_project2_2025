@@ -1,7 +1,7 @@
 /**
  * @file tools.h 
  * @brief IPK project 2 - Client for a chat server
- * @date 13-4-2025
+ * @date 15-4-2025
  * Author: Jaroslav Mervart, xmervaj00
 */
 
@@ -11,10 +11,12 @@
 #include <iostream>
 #include <stdexcept> // std::stoi exceptions
 #include <regex>
-#include <thread>
 
-#define ERR_MISSING 10
-#define ERR_INVALID 11
+#define ERR_MISSING  10
+#define ERR_INVALID  11
+#define ERR_TIMEOUT  12
+#define ERR_CONNECTION 13
+#define ERR_SERVER   14
 #define ERR_INTERNAL 99
 
 #ifdef DEBUG_PRINT

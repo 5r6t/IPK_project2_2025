@@ -1,7 +1,7 @@
 /**
  * @file client_session.h
  * @brief IPK project 2 - Client for a chat server
- * @date 14-4-2025
+ * @date 15-4-2025
  * Author: Jaroslav Mervart, xmervaj00
 */
 
@@ -18,9 +18,9 @@
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h> // read(), close()
-#include <thread>
 #include <csignal>
 #include <atomic>
+#include <memory> // unique_ptr
 
 #include "client_init.h"
 #include "client_comms.h"
@@ -66,7 +66,7 @@ class Client_Session {
         bool check_message_content(const std::string &content, msg_param param);
 
         static void handle_sigint(int);
-        void graceful_exit();                
+        void graceful_exit(int ex_code = 0);                
 
         void send_message(const std::string &msg);  // junction function between protocols
         std::string receive_message();              // junction function between protocols

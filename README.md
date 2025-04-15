@@ -21,7 +21,7 @@
 * https://pubs.opengroup.org/onlinepubs/000095399/functions/setsockopt.html -- decided to not use
 
 ## Architecture Overview 
-```ini
+```lisp
 /**
  * Legend
  * init: gets constructed from

@@ -23,6 +23,7 @@
 # Legend
 ```c#
 /**
+ * Legend
  * init: gets constructed from
  * data: supplies configuration values
  * uses: functions supplied by said class

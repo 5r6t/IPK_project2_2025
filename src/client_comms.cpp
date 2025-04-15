@@ -1,5 +1,5 @@
 /**
- * @file tcp_comm.cpp
+ * @file client_comms.cpp
  * @brief IPK project 2 - Client for a chat server
  * @date 15-4-2025
  * Author: Jaroslav Mervart, xmervaj00
@@ -15,6 +15,30 @@ int Client_Comms::get_socket() {
     return this->client_socket;
 }
 
+std::optional<std::string> Client_Comms::timed_reply(int timeout_ms, bool is_tcp) {
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(client_socket, &rfds);
+
+    struct timeval tv;
+    tv.tv_sec = timeout_ms / 1000;
+    tv.tv_usec = (timeout_ms % 1000) * 1000;
+
+    int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
+    if (ready <= 0) {
+        return std::nullopt;
+    }
+
+    return is_tcp ? receive_tcp_message() : receive_udp_message();  
+}
+
+/**
+ *   MMMMMMM   OOOO  HHHH
+ *      H     O      H   H
+ *      H     O      HHHHH
+ *      H     O      H 
+ *      H      OOOO  H
+*/
 void Client_Comms::connect_tcp() {
     int family = AF_INET;
     int type = SOCK_STREAM;
@@ -22,7 +46,7 @@ void Client_Comms::connect_tcp() {
     this->client_socket = socket(family, type, protocol);
 
     struct sockaddr_in server_addr {};
-        server_addr.sin_family = AF_INET;
+        server_addr.sin_family = family;
         server_addr.sin_port = htons(this->port); // port from config
         inet_pton(AF_INET, this->ip.c_str(), &server_addr.sin_addr);
         
@@ -49,23 +73,6 @@ void Client_Comms::terminate_connection(int ex_code) {
     exit(ex_code);
 }
 
-std::optional<std::string> Client_Comms::expect_reply(int timeout_ms) {
-    fd_set rfds;
-    FD_ZERO(&rfds);
-    FD_SET(client_socket, &rfds);
-
-    struct timeval tv;
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
-
-    int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
-    if (ready <= 0) {
-        return std::nullopt;
-    }
-
-    return receive_tcp_message(); 
-}
-
 void Client_Comms::send_tcp_message(const std::string &msg) {
     int bytes_tx = send(this->client_socket, msg.c_str(), strlen(msg.c_str()), 0);
     if (bytes_tx < 0) {
@@ -88,7 +95,7 @@ std::string Client_Comms::receive_tcp_message() {
 }
 
 void Client_Comms::receive_tcp_chunk() {
-    printf_debug("%s", "Getting another TCP message chunk.");
+    printf_debug("Getting another TCP message chunk.");
 
     char temp[BUFFER_SIZE];
     int bytes_rx = recv(client_socket, temp, BUFFER_SIZE - 1, 0);
@@ -98,14 +105,25 @@ void Client_Comms::receive_tcp_chunk() {
         return;
     }
     if (bytes_rx == 0) {
-        std::cout << "ERROR: Server has closed the connection\n."; // no need to send BYE
+        std::cout << "ERROR: Server has closed the connection\n."; // nowhere to send BYE
         terminate_connection(ERR_SERVER);
     }
     temp[bytes_rx] = '\0';
     this->tcp_buffer += temp; // Add another chunk
 }
-
+/**
+  *   H    H  HOOOO   HHHO
+  *   H    H  H    O  H   H
+  *   H    H  H    O  HHHHO
+  *   O    O  H    O  H
+  *    OOOO   HOOOO   H
+*/
 void Client_Comms::send_udp_message(const std::string &msg) {
-    printf_debug("%s", "Not implemented yet!");
+    printf_debug("Not implemented yet!");
     return;
+}
+
+std::string Client_Comms::receive_udp_message() {
+    printf_debug("UDP receive not implemented.");
+    return {};
 }

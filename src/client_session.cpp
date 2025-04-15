@@ -186,7 +186,7 @@ void Client_Session::send_auth(const std::vector<std::string>& args) {
     auto auth_msg = "AUTH " + username + " AS " + this->display_name + " USING " + secret + "\r\n"; 
     send_message(auth_msg); 
 
-    auto reply = comms->expect_reply(5000);
+    auto reply = comms->timed_reply(5000);
     if (!reply) {
         std::cout << "ERROR: Authentication timed out.\n";
         graceful_exit();
@@ -213,7 +213,7 @@ void Client_Session::send_join(const std::vector<std::string>& args) {
         auto join_msg = "JOIN " + args.at(0) + " AS " + this->display_name + "\r\n"; 
         send_message(join_msg);
 
-        auto reply = comms->expect_reply(5000);
+        auto reply = comms->timed_reply(5000);
         if (!reply) {
             std::cout << "ERROR: Authentication timed out.\n";
             graceful_exit(ERR_TIMEOUT);
@@ -287,7 +287,15 @@ std::string Client_Session::receive_message() {
 }
 
 void Client_Session::handle_server_message(std::string &msg) {
-    ParsedMessage parsed = parse_message(msg);
+    auto parsed_opt = parse_message(msg);
+    if (!parsed_opt) {
+        std::cout << "ERROR: Malformed message received: " << msg << "\n";
+        std::string err = "ERR FROM " + this->display_name + " IS invalid message\r\n";
+        send_message(err);
+        graceful_exit();
+        return;
+    }
+    const ParsedMessage& parsed = *parsed_opt;
 
     switch (this->state) {
         case ClientState::Auth:
@@ -340,9 +348,9 @@ void Client_Session::handle_server_message(std::string &msg) {
     }
 }
 
-Client_Session::ParsedMessage Client_Session::parse_message(const std::string &msg) {
+std::optional<Client_Session::ParsedMessage> Client_Session::parse_message(const std::string &msg) {
     ParsedMessage result;
-    printf_debug("%s", msg.c_str());
+    printf_debug("Parsing message: %s", msg.c_str());
 
     // Handle positive reply
     if (msg.starts_with("REPLY OK IS ")) {

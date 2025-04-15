@@ -1,5 +1,5 @@
 /**
- * @file tcp_comm.h
+ * @file client_comms.h
  * @brief IPK project 2 - Client for a chat server
  * @date 15-4-2025
  * Author: Jaroslav Mervart, xmervaj00
@@ -27,11 +27,15 @@ class Client_Comms {
         int client_socket = -1;
         Client_Comms(const std::string &ip, uint16_t port);
         
+        // TCP
         void connect_tcp();
         void send_tcp_message(const std::string &msg);
-        void send_udp_message(const std::string &msg);
         std::string receive_tcp_message();
-        std::optional<std::string> expect_reply(int timeout_ms=TIMEOUT);
+        //
+        std::optional<std::string> timed_reply(int timeout_ms=TIMEOUT, bool is_tcp = true);
+        // UDP
+        void send_udp_message(const std::string &msg);
+        std::string receive_udp_message();
 
 
         int get_socket(); // for FD_SET()

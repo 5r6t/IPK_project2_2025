@@ -73,5 +73,5 @@ class Client_Session {
         std::string receive_message();              // junction function between protocols
 
         void handle_server_message(std::string &msg);
-        ParsedMessage parse_message(const std::string &msg);
+        std::optional<ParsedMessage> parse_message(const std::string &msg);
 };

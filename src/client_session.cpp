@@ -208,22 +208,23 @@ void Client_Session::send_join(const std::vector<std::string>& args) {
     }
 
     this->state = ClientState::Join;
-    if (check_message_content(args.at(0), ChannelID)) {
+    if (check_message_content(args.at(0), ChannelID)) { // to allow "discord.channel", just invert the condition (else '.' is not allowed by grammar)
         // JOIN {ChannelID} AS {DisplayName}\r\n
         auto join_msg = "JOIN " + args.at(0) + " AS " + this->display_name + "\r\n"; 
-        send_message(join_msg);        
+        send_message(join_msg);
+
+        auto reply = comms->expect_reply(5000);
+        if (!reply) {
+            std::cout << "ERROR: Authentication timed out.\n";
+            graceful_exit(ERR_TIMEOUT);
+            return;
+        }
+
+    std::string confirmation = *reply;
+    handle_server_message(confirmation);     
     } else {
         std::cout << "ERROR: Invalid ChannelID format, try again.\n";
     }
-    auto reply = comms->expect_reply(5000);
-    if (!reply) {
-        std::cout << "ERROR: Authentication timed out.\n";
-        graceful_exit(ERR_TIMEOUT);
-        return;
-    }
-
-    std::string confirmation = *reply;
-    handle_server_message(confirmation);
 }
 
 void Client_Session::rename(const std::vector<std::string>& args) {

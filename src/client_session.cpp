@@ -14,7 +14,7 @@ Client_Session::Client_Session(const Client_Init &config)
     : config(config) {
     active_instance = this;
     this->comms = std::make_unique<Client_Comms>(
-        config.get_ip(), config.get_port());
+        config.get_hostname(), config.get_port());
 }
 
 std::atomic<bool> stop_requested = false;
@@ -92,6 +92,14 @@ void Client_Session::run(){
         }
         
         if (stop_requested) break;
+    }
+}
+
+void Client_Session::connect() {
+    if (config.get_protocol() == "tcp") {
+        comms->connect_tcp();
+    } else {
+        comms->connect_udp();
     }
 }
 

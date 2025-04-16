@@ -1,7 +1,7 @@
 /**
  * @file client_init.cpp
  * @brief IPK project 2 - Chat client
- * @date 13-4-2025
+ * @date 16-4-2025
  * Author: Jaroslav Mervart, xmervaj00
 */
 
@@ -9,7 +9,7 @@
 #include "tools.h"
 
 std::string Client_Init::get_protocol() const { return protocol; }
-std::string Client_Init::get_ip()       const { return ip; }
+std::string Client_Init::get_hostname() const { return hostname; }
 uint16_t    Client_Init::get_port()     const { return port; }
 uint16_t    Client_Init::get_timeout()  const { return timeout; }
 uint8_t     Client_Init::get_retries()  const { return retries; }
@@ -22,30 +22,8 @@ void Client_Init::set_protocol(std::string protocol) {
     this->protocol = protocol;
 }
 
-void Client_Init::set_ip(std::string host) {
-    struct addrinfo hints, *result, *next;
-    char ip_buffer[INET_ADDRSTRLEN];
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET; // Allow IPv4
-    hints.ai_socktype = SOCK_STREAM; // TCP stream sockets
-
-    if (getaddrinfo(host.c_str(), nullptr, &hints, &result) != 0) {
-        std::cerr << "Error: Unable to resolve domain name: " << host << "\n";
-        exit(ERR_INVALID);
-    }
-    for (next = result; next != nullptr; next = next->ai_next) { // Loop through getaddrinfo results
-        void* addr;
-        if (next->ai_family == AF_INET) {
-            struct sockaddr_in* ipv4 = (struct sockaddr_in*)next->ai_addr;
-            addr = &(ipv4->sin_addr);
-        }
-        else 
-            continue; // Skip unsupported address families
-
-        inet_ntop(next->ai_family, addr, ip_buffer, sizeof(ip_buffer)); // Address to string
-        this->ip = ip_buffer;
-    }
-    freeaddrinfo(result);
+void Client_Init::set_hostname(std::string host) { // TCP right now, no UDP in sight
+    this->hostname = host;
 }
 
 void Client_Init::set_port(std::string port) {
@@ -81,11 +59,11 @@ void Client_Init::print_help() {
 
 void Client_Init::validate() {
     printf_debug("Transport: %s", protocol.c_str());
-    printf_debug("IP:        %s", ip.c_str());
+    printf_debug("Hostname:        %s", hostname.c_str());
     printf_debug("Port:      %u", port);
     printf_debug("Timeout:   %u ms", timeout);
     printf_debug("Retries:   %u", retries);
-    if (this->protocol == "" || this->ip == "" ) {
+    if (this->protocol == "" || this->hostname == "" ) {
         std::cerr << "Protocol or IP not selected, display help with '-h'.\n";
         exit(ERR_INVALID);
     }

@@ -60,18 +60,18 @@ class Client_Session {
         void handle_command(const std::string& line);
 
         void print_local_help();
-        void send_auth(const std::vector<std::string>& args);   // sends auth request
-        void send_join(const std::vector<std::string>& args);   // sends join rqst
-        void rename(const std::vector<std::string>& args);      // sends rename rqst
-        
-        bool check_message_content(const std::string &content, msg_param param);
+        void send_auth(const std::vector<std::string>& args);
+        void send_join(const std::vector<std::string>& args);
+        void rename(const std::vector<std::string>& args);
 
         static void handle_sigint(int);
         void graceful_exit(int ex_code = 0);                
 
+        void connect();                             // junction function between protocols
         void send_message(const std::string &msg);  // junction function between protocols
         std::string receive_message();              // junction function between protocols
 
+        bool check_message_content(const std::string &content, msg_param param);
         void handle_server_message(std::string &msg);
         std::optional<ParsedMessage> parse_message(const std::string &msg);
 };

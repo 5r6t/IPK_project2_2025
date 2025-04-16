@@ -30,7 +30,7 @@
             config.set_protocol(get_next_arg(i, arg));
         }
         else if (arg == "-s") {
-            config.set_ip(get_next_arg(i, arg));
+            config.set_hostname(get_next_arg(i, arg));
         }
         else if (arg == "-p") {
             config.set_port(get_next_arg(i, arg));

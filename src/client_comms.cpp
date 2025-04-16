@@ -8,8 +8,8 @@
 #include "client_comms.h"
 #include "tools.h"
 
-Client_Comms::Client_Comms(const std::string &ip, uint16_t port)
-    : ip(ip), port(port) {}
+Client_Comms::Client_Comms(const std::string &hostname, uint16_t port)
+    : host_name(hostname), port(port) {}
 
 int Client_Comms::get_socket() {
     return this->client_socket;
@@ -48,7 +48,7 @@ void Client_Comms::connect_tcp() {
     struct sockaddr_in server_addr {};
         server_addr.sin_family = family;
         server_addr.sin_port = htons(this->port); // port from config
-        inet_pton(AF_INET, this->ip.c_str(), &server_addr.sin_addr);
+        inet_pton(AF_INET, this->host_name.c_str(), &server_addr.sin_addr);
         
     socklen_t address_size = sizeof(server_addr);
     struct sockaddr *address = (struct sockaddr*)&server_addr;
@@ -118,8 +118,30 @@ void Client_Comms::receive_tcp_chunk() {
   *   O    O  H    O  H
   *    OOOO   HOOOO   H
 */
+void Client_Comms::connect_udp() { // Unfinished
+    int family = AF_INET;
+    int type = SOCK_DGRAM;
+    int protocol = 0;
+    this->client_socket = socket(family, type, protocol);
+    if (this->client_socket <= 0) {
+        perror("ERRORR: socket");
+        std::cerr << "ERROR: Cannot create socket.\n";
+        terminate_connection(ERR_INTERNAL);
+    }
+
+}
+
 void Client_Comms::send_udp_message(const std::string &msg) {
-    printf_debug("Not implemented yet!");
+    printf_debug("Sending UDP message.");
+    auto server_address = this->host_name;
+    int flags = 0;
+    struct sockaddr *address = (struct sockaddr *) &server_address;
+    int address_size = sizeof(server_address);
+    int bytes_tx = sendto(client_socket, msg.c_str(), strlen(msg.c_str()),
+                          flags, address, address_size);
+    if (bytes_tx < 0) {
+        perror("ERROR: sendto");
+    }                          
     return;
 }
 

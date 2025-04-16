@@ -25,25 +25,31 @@
 class Client_Comms {
     public:
         int client_socket = -1;
-        Client_Comms(const std::string &ip, uint16_t port);
+        int get_socket(); // for FD_SET() in client_session
+        
+        Client_Comms(const std::string &hostname, const std::string &protocol, uint16_t port);
 
+        void connect_set();
         // TCP
+        void resolve_ip();
         void connect_tcp();
         void send_tcp_message(const std::string &msg);
         std::string receive_tcp_message();
-        //
+        // 
         std::optional<std::string> timed_reply(int timeout_ms=TIMEOUT, bool is_tcp = true);
         // UDP
-        void connect_udp();
+        void set_udp();
         void send_udp_message(const std::string &msg);
         std::string receive_udp_message();
 
 
-        int get_socket(); // for FD_SET()
         void terminate_connection(int ex_code = 0);
-        std::string tcp_buffer;
+        std::string buffer;
     private:
         std::string host_name;
+        std::string ip_address;
+        sockaddr_in udp_address;
+        std::string tproto;
         uint16_t port;
         void receive_tcp_chunk();
 

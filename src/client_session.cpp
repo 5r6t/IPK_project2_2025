@@ -14,7 +14,7 @@ Client_Session::Client_Session(const Client_Init &config)
     : config(config) {
     active_instance = this;
     this->comms = std::make_unique<Client_Comms>(
-        config.get_hostname(), config.get_port());
+        config.get_hostname(), config.get_protocol(), config.get_port());
 }
 
 std::atomic<bool> stop_requested = false;
@@ -53,7 +53,8 @@ void Client_Session::run(){
     std::string cmd_buffer;
 
     std::signal(SIGINT, handle_sigint);
-    comms->connect_tcp();
+    comms->resolve_ip();
+    comms->connect_set();
     this->state = ClientState::Start;
 
     while(true) {
@@ -95,13 +96,6 @@ void Client_Session::run(){
     }
 }
 
-void Client_Session::connect() {
-    if (config.get_protocol() == "tcp") {
-        comms->connect_tcp();
-    } else {
-        comms->connect_udp();
-    }
-}
 
 /**
      * '_' means no input received/sent

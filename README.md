@@ -20,6 +20,9 @@
 * https://www.oreilly.com/library/view/hands-on-network-programming/9781789349863/8e8ea0c3-cf7f-46c0-bd6f-5c7aa6eaa366.xhtml -- timeout
 * https://pubs.opengroup.org/onlinepubs/000095399/functions/setsockopt.html -- decided to not use
 
+## Notes and more
+- break; // first resolved address is used -> add to documentation?
+
 ## Architecture Overview 
 ```lisp
 /**

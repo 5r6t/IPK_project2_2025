@@ -34,7 +34,7 @@
         ╔═══ (init+data) ═════╩══════ (init) ═════════╗
         ║                                             ║ 
         ║                                             ║
-  [ Client Config ] ═════════ (data) ═════════> [ Client Session ]
+  [ Client Init ] ═════════ (data) ═════════> [ Client Session ]
         ║                                             ║  ║
         ║                                             ║  ║
         ╚══ (uses) ════> [ Toolkit ] <════ (uses) ════╝  ║

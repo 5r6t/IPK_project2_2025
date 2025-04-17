@@ -23,8 +23,9 @@ class Client_Init {
         void set_udp_retries(std::string max_num); // set Maximum number of UDP retransmissions -- uint8
         void print_help();
         void validate(); 
+        
         std::string get_hostname() const;
-        std::string get_protocol() const;
+        bool is_tcp() const;
         uint16_t get_port() const;
         uint16_t get_timeout() const;
         uint8_t get_retries() const;

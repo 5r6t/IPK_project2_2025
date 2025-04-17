@@ -67,7 +67,8 @@ class Client_Session {
         static void handle_sigint(int);
         void graceful_exit(int ex_code = 0);                
 
-        void send_message(const std::string &msg);  // junction function between protocols
+        void send_message(const std::string& msg);  // junction function between protocols
+        void send_message(const std::vector<uint8_t>& msg);  // junction function between protocols
         std::string receive_message();              // junction function between protocols
 
         bool check_message_content(const std::string &content, msg_param param);

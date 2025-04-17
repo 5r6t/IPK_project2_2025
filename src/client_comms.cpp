@@ -8,15 +8,19 @@
 #include "client_comms.h"
 #include "tools.h"
 
-Client_Comms::Client_Comms(const std::string &hostname, const std::string &protocol, uint16_t port)
+Client_Comms::Client_Comms(const std::string &hostname, bool protocol, uint16_t port)
     : host_name(hostname), tproto(protocol), port(port) {}
 
 int Client_Comms::get_socket() {
     return this->client_socket;
 }
 
+uint16_t Client_Comms::next_msg_id() {
+    return this->msg_id_cnt++;
+}
+
 void Client_Comms::connect_set() {
-    if (this->tproto == "tcp") {
+    if (this->tproto) {
         connect_tcp();
     } else {
         set_udp(); // no connect, just sets socket
@@ -30,7 +34,8 @@ void Client_Comms::terminate_connection(int ex_code) {
     exit(ex_code);
 }
 
-std::optional<std::string> Client_Comms::timed_reply(bool is_tcp) {
+std::optional<std::string> Client_Comms::timed_tcp_reply() 
+{
     fd_set rfds;
     FD_ZERO(&rfds);
     FD_SET(client_socket, &rfds);
@@ -44,7 +49,25 @@ std::optional<std::string> Client_Comms::timed_reply(bool is_tcp) {
         return std::nullopt;
     }
 
-    return is_tcp ? receive_tcp_message() : receive_udp_message();  
+    return receive_tcp_message();
+}
+
+std::optional<std::vector<uint8_t>> Client_Comms::timed_udp_reply() 
+{
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(client_socket, &rfds);
+
+    struct timeval tv;
+    tv.tv_sec = TIMEOUT / 1000;
+    tv.tv_usec = (TIMEOUT % 1000) * 1000;
+
+    int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
+    if (ready <= 0) {
+        return std::nullopt;
+    }
+
+    return receive_udp_message();
 }
 
 void Client_Comms::resolve_ip() {
@@ -53,7 +76,7 @@ void Client_Comms::resolve_ip() {
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_INET;
 
-    if (tproto == "tcp") {
+    if (this->tproto) {
         hints.ai_socktype = SOCK_STREAM;
     } else {
         hints.ai_socktype = SOCK_DGRAM;
@@ -68,7 +91,7 @@ void Client_Comms::resolve_ip() {
         if (next->ai_family == AF_INET) {
             struct sockaddr_in* ipv4 = (struct sockaddr_in*)next->ai_addr;
 
-            if (tproto == "tcp") {
+            if (this->tproto) {
                 char ip_buf[INET_ADDRSTRLEN];
                 inet_ntop(AF_INET, &(ipv4->sin_addr), ip_buf, sizeof(ip_buf));
                 this->ip_address = ip_buf;
@@ -96,7 +119,8 @@ void Client_Comms::resolve_ip() {
  *      H      OOOO  H
 */
 
-void Client_Comms::connect_tcp() {
+void Client_Comms::connect_tcp() 
+{
     int family = AF_INET;
     int type = SOCK_STREAM;
     int protocol = IPPROTO_TCP;
@@ -133,7 +157,8 @@ void Client_Comms::send_tcp_message(const std::string &msg) {
     }
 }
 
-std::string Client_Comms::receive_tcp_message() {
+std::string Client_Comms::receive_tcp_message() 
+{
     while (true) {
         size_t pos = this->buffer.find("\r\n");
         if (pos != std::string::npos) {
@@ -146,38 +171,42 @@ std::string Client_Comms::receive_tcp_message() {
 }
 
 void Client_Comms::receive_tcp_chunk() {
-    printf_debug("Getting another TCP message chunk.");
+    printf_debug("Getting another TCP message chunk...");
+
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(client_socket, &rfds);
 
     struct timeval tv;
     tv.tv_sec = TIMEOUT / 1000;
     tv.tv_usec = (TIMEOUT % 1000) * 1000;
-    setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
+    if (ready <= 0) {
+        std::cerr << "ERROR: recv() timeout or error.\n";
+        std::string err = "ERR FROM " + this->ip_address + " IS incomplete message\r\n";
+        send_tcp_message(err);
+        terminate_connection(ERR_SERVER);
+        return;
+    }
 
     char temp[BUFFER_SIZE];
     int bytes_rx = recv(client_socket, temp, BUFFER_SIZE - 1, 0);
-
-    tv.tv_sec = 0; tv.tv_usec = 0; // reset timeout
-    setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-
     if (bytes_rx < 0) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            temp[bytes_rx] = '\0';
-            std::cerr << "ERROR: Incomplete message received:" << temp << "\n";
-            send_tcp_message("ERR FROM " + this->ip_address + " IS incomplete message\r\n");
-            terminate_connection(ERR_SERVER);
-        } else {
-            perror("ERROR: recv");
-        }
+        perror("ERROR: recv");
         return;
     }
-    
+
     if (bytes_rx == 0) {
-        std::cout << "ERROR: Server has closed the connection\n."; // nowhere to send BYE
+        std::cout << "ERROR: Server has closed the connection.\n";
         terminate_connection(ERR_SERVER);
+        return;
     }
+
     temp[bytes_rx] = '\0';
-    this->buffer += temp; // Add another chunk
+    buffer += temp;
 }
+
 /**
   *   H    H  HOOOO   HHHO
   *   H    H  H    O  H   H
@@ -186,7 +215,8 @@ void Client_Comms::receive_tcp_chunk() {
   *    OOOO   HOOOO   H
 */
 
-void Client_Comms::set_udp() {
+void Client_Comms::set_udp() 
+{
     int family = AF_INET;
     int type = SOCK_DGRAM;
     int protocol = 0;
@@ -198,13 +228,23 @@ void Client_Comms::set_udp() {
     }
 }
 
-void Client_Comms::send_udp_message(const std::string &msg) {
+void Client_Comms::send_udp_message(const std::vector<uint8_t>& pac) 
+{
     printf_debug("Sending UDP message.");
+    send_udp_packet(pac);
+}
 
+void Client_Comms::send_udp_packet(const std::vector<uint8_t>& pac) 
+{
+    printf_debug("Sending UDP packet.");
     int flags = 0;
-    struct sockaddr *address = (struct sockaddr *) &udp_address;
-    int address_size = sizeof(udp_address);
-    int bytes_tx = sendto(client_socket, msg.c_str(), strlen(msg.c_str()),
+
+    sockaddr_in *in_addr = has_dyn_addr ? &dynamic_address : &udp_address;
+    sockaddr* address = (sockaddr*) in_addr;
+
+    socklen_t address_size = sizeof(*in_addr);
+    
+    int bytes_tx = sendto(this->client_socket, pac.data(), pac.size(), 
                           flags, address, address_size);
     if (bytes_tx < 0) {
         perror("ERROR: sendto");
@@ -212,21 +252,43 @@ void Client_Comms::send_udp_message(const std::string &msg) {
     return;
 }
 
-std::string Client_Comms::receive_udp_message() {
-    printf_debug("UDP receive not completely implemented.");
+std::vector<uint8_t> Client_Comms::receive_udp_message() 
+{
+    printf_debug("Receiving UDP message.");
+    //std::vector<uint8_t> rcv = receive_udp_packet();
+    //return rcv;
+    return receive_udp_packet();              
+}
 
+std::vector<uint8_t> Client_Comms::receive_udp_packet() 
+{
+    printf_debug("Receiving UDP message...");
 
-    struct sockaddr *address = (struct sockaddr *) &udp_address;
-    socklen_t address_size = sizeof(udp_address);
-    int flags = 0;
-    //..
+    std::vector<uint8_t> data;
     char temp[BUFFER_SIZE];
-    int bytes_rx = recvfrom(client_socket, temp, BUFFER_SIZE-1, 
-                            flags, address, &address_size);
+
+    sockaddr_in src_addr{};
+    socklen_t addr_len = sizeof(src_addr);
+
+    int bytes_rx = recvfrom(client_socket, temp, BUFFER_SIZE,
+                            0, (sockaddr*)&src_addr, &addr_len);
 
     if (bytes_rx < 0) 
     {
         perror("ERROR: recvfrom");
+        return {};
     }
-    return {};
+
+    if (!has_dyn_addr) 
+    {
+        if ((uint8_t)temp[0] == 0x01) 
+        {
+            dynamic_address = src_addr;
+            has_dyn_addr = true;
+            printf_debug("Stored dynamic server address: port %d", ntohs(src_addr.sin_port));
+        }
+    }
+
+    data.insert(data.end(), temp, temp + bytes_rx); // copying into vector
+    return data;
 }

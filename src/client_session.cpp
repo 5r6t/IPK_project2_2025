@@ -14,7 +14,7 @@ Client_Session::Client_Session(const Client_Init &config)
     : config(config) {
     active_instance = this;
     this->comms = std::make_unique<Client_Comms>(
-        config.get_hostname(), config.get_protocol(), config.get_port());
+        config.get_hostname(), config.is_tcp(), config.get_port());
 }
 
 std::atomic<bool> stop_requested = false;
@@ -40,7 +40,7 @@ void Client_Session::handle_sigint(int) {
 }
 
 void Client_Session::graceful_exit(int ex_code) {
-    if (config.get_protocol() == "tcp") {
+    if (config.is_tcp() == true) {
         std::string bye_msg = "BYE FROM " + this->display_name + "\r\n";
         comms->send_tcp_message(bye_msg);
     }
@@ -96,33 +96,6 @@ void Client_Session::run(){
     }
 }
 
-
-/**
-     * '_' means no input received/sent
-     * '*' means any input (all possible messages)
-     * '!' means negative version
-     * 
-     * (start) --- server:ERR, BYE -> client: _    --- ((end))
-     * (start) --- server: _       -> client: AUTH --- (auth)
-     * 
-     *      (auth) --- server: !REPLY   -> client: AUTH --- (auth)
-     *      (auth) --- server: ERR, BYE -> client: _    --- ((end)) 
-     *      (auth) --- server: MSG      -> client: ERR  --- ((end)) 
-     *      (auth) --- server: _        -> client: BYE  --- ((end)) // ctrl+c on clientside caused this ig
-     *      (auth) --- server: REPLY    -> client: _    --- (open) 
-     * 
-     *          (open) --- server: MSG      -> client: _    --- (open)  // server can send messages
-     *          (open) --- server: _        -> client: MSG  --- (open)  // client can send messages
-     *          (open) --- server: ERR, BYE -> client: _    --- ((end)) // server sends error, client quits
-     *          (open) --- server: *REPLY   -> client: ERR  --- ((end)) // idk 
-     *          (open) --- server: _        -> client: BYE  --- ((end)) // client says bye, program ends
-     *          (open) --- server: _        -> client: JOIN --- (join)  // client can join
-     * 
-     *              (join) -- server: MSG       -> client: _   --- (join) 
-     *              (join) -- server: *REPLY    -> client: _   --- (open)
-     *              (join) -- server: ERR, BYE  -> client: _   --- ((end))
- */
-
 void Client_Session::handle_chat_msg(const std::string &line) {
     if (this->state != ClientState::Open) {
         std::cout << "ERROR: You must authenticate first. See '/help'.\n";
@@ -164,7 +137,8 @@ void Client_Session::handle_command(const std::string &line) {
     }
 }
 
-void Client_Session::send_auth(const std::vector<std::string>& args) {
+void Client_Session::send_auth(const std::vector<std::string>& args) 
+{
     if (this->state != ClientState::Start) {
         std::cout << "ERROR: Cannot authenticate again.\n";
         return;
@@ -179,67 +153,106 @@ void Client_Session::send_auth(const std::vector<std::string>& args) {
     auto secret = args.at(1);
     rename(std::vector<std::string>{args[2]});
 
-    if (!check_message_content(username, Username) || !check_message_content(secret, Secret)) {
+    if (!check_message_content(username, Username) 
+        || !check_message_content(secret, Secret)) {
         std::cout << "ERROR: Invalid Username/Secret format.\n";
         this->state = ClientState::Open;
         return;
     }
-    // AUTH {Username} AS {DisplayName} USING {Secret}\r\n
-    auto auth_msg = "AUTH " + username + " AS " + this->display_name + " USING " + secret + "\r\n"; 
-    send_message(auth_msg); 
 
-    std::optional<std::string> reply;
-    if (config.get_protocol() == "tcp") {
-        reply = comms->timed_reply();
+    std::optional<std::string> tcp_reply;
+    std::optional<std::vector<uint8_t>> udp_reply;
+
+    if (config.is_tcp()) {
+        auto auth_msg = "AUTH " + username + " AS " + this->display_name 
+                        + " USING " + secret + "\r\n"; 
+        send_message(auth_msg); 
+        tcp_reply = comms->timed_tcp_reply(); 
     } else {
-        reply = comms->timed_reply(false);
+        auto msg_id = comms->next_msg_id();
+        auto auth_msg = Toolkit::build_auth(msg_id, username, 
+                                            this->display_name, secret);
+        send_message(auth_msg);
+        udp_reply = comms->timed_udp_reply();
     }
-    if (!reply) {
+
+    if (!tcp_reply && !udp_reply) {
         std::cout << "ERROR: Authentication timed out.\n";
         graceful_exit();
         return;
     }
-
-    std::string confirmation = *reply;
-    handle_server_message(confirmation);
+    if (config.is_tcp()) {
+        std::string tcp_confirmation = *tcp_reply;
+        handle_server_message(tcp_confirmation);
+    } else {
+        std::vector<uint8_t> udp_confirmation = *udp_reply;
+        //handle_server_message(udp_confirmation);
+    }
 }
 
-void Client_Session::send_join(const std::vector<std::string>& args) {
-    if (this->state != ClientState::Open) {
+void Client_Session::send_join(const std::vector<std::string>& args) 
+{
+    if (this->state != ClientState::Open) 
+    {
         std::cout << "ERROR: To join a channel, you first must authenticate.\n";
         return;
     }
-    if (args.size() != 1) { // /join {ChannelID}
+
+    if (args.size() != 1) 
+    {   // /join {ChannelID}
         std::cout << "ERROR: No ChannelID, try again.\n";
         return;
     }
 
     this->state = ClientState::Join;
-    if (check_message_content(args.at(0), ChannelID)) { // to allow "discord.channel", just invert the condition (else '.' is not allowed by grammar)
-        // JOIN {ChannelID} AS {DisplayName}\r\n
+
+    auto channel_id = args.at(0);
+    if (!check_message_content(channel_id, ChannelID)) 
+    {   // JOIN {ChannelID} AS {DisplayName}\r\n
+        std::cout << "ERROR: Invalid ChannelID format, try again.\n";
+        return;
+    }
+
+    std::optional<std::string> tcp_reply;
+    std::optional<std::vector<uint8_t>> udp_reply;
+
+    if (config.is_tcp()) 
+    {
         auto join_msg = "JOIN " + args.at(0) + " AS " + this->display_name + "\r\n"; 
         send_message(join_msg);
-
-        auto reply = comms->timed_reply(5000);
-        if (!reply) {
-            std::cout << "ERROR: Authentication timed out.\n";
-            graceful_exit(ERR_TIMEOUT);
-            return;
-        }
-
-    std::string confirmation = *reply;
-    handle_server_message(confirmation);     
+        tcp_reply = comms->timed_tcp_reply();
     } else {
-        std::cout << "ERROR: Invalid ChannelID format, try again.\n";
+        auto msg_id = comms->next_msg_id();
+        auto join_msg = Toolkit::build_join(msg_id, channel_id, this->display_name);
+        send_message(join_msg);
+        udp_reply = comms->timed_udp_reply();   
+    }
+
+    if (!tcp_reply && !udp_reply) 
+    {
+        std::cout << "ERROR: Join timed out.\n";
+        graceful_exit(ERR_TIMEOUT);
+        return;
+    }
+
+    if (config.is_tcp()) {
+        std::string tcp_confirmation = *tcp_reply;
+        handle_server_message(tcp_confirmation);
+    } else {
+        std::vector<uint8_t> udp_confirmation = *udp_reply;
+        //handle_server_message(udp_confirmation);
     }
 }
 
-void Client_Session::rename(const std::vector<std::string>& args) {
-    if ( !(args.size() == 1)) { // /rename {DisplayName}
+void Client_Session::rename(const std::vector<std::string>& args) 
+{
+    if ( !(args.size() == 1)) 
+    {   // /rename {DisplayName}
         std::cout << "ERROR: No or multiple usernames selected, try again.\n";
         return;
     }
-    if (check_message_content(args.at(0), DisplayName)) {
+    if (check_message_content(args.at(0), DisplayName)) 
+    {
         this->display_name = args.at(0);
         printf_debug("Changed DisplayName to '%s'", this->display_name.c_str()); 
     } else {
@@ -247,7 +260,8 @@ void Client_Session::rename(const std::vector<std::string>& args) {
     }
 }
 
-bool Client_Session::check_message_content(const std::string &content, msg_param param) {
+bool Client_Session::check_message_content(const std::string &content, msg_param param) 
+{
     switch (param)
     {
     case Username:
@@ -273,22 +287,23 @@ bool Client_Session::check_message_content(const std::string &content, msg_param
     }
 }
 
-void Client_Session::send_message(const std::string &msg) {
-    if (config.get_protocol() == "tcp") {
-        printf_debug("About to send %s", msg.c_str());
-        comms->send_tcp_message(msg);
-    } else {
-        comms->send_udp_message(msg);
-    }
+void Client_Session::send_message(const std::string& msg) {
+    printf_debug("About to send %s", msg.c_str());
+    comms->send_tcp_message(msg);
+}
+void Client_Session::send_message(const std::vector<uint8_t>& msg) {
+    printf_debug("About to send UDP message");
+    comms->send_udp_message(msg);
 }
 
 std::string Client_Session::receive_message() {
     std::string msg;
-    if(config.get_protocol() == "tcp") {
+    if(config.is_tcp()) {
         msg = comms->receive_tcp_message();
     } else {
         /* udp */
-        msg = "ERROR: Not implemented.";
+        printf_debug("UDP receive not implemented yet");
+        msg = "";
     }
     return msg;
 }
@@ -355,7 +370,8 @@ void Client_Session::handle_server_message(std::string &msg) {
     }
 }
 
-std::optional<Client_Session::ParsedMessage> Client_Session::parse_message(const std::string &msg) {
+std::optional<Client_Session::ParsedMessage> Client_Session::parse_message(const std::string &msg) 
+{
     ParsedMessage result;
     printf_debug("Parsing message: %s", msg.c_str());
 

@@ -8,13 +8,14 @@
 #include "client_init.h"
 #include "tools.h"
 
-std::string Client_Init::get_protocol() const { return protocol; }
+bool Client_Init::is_tcp() const { return protocol == "tcp"; }
 std::string Client_Init::get_hostname() const { return hostname; }
 uint16_t    Client_Init::get_port()     const { return port; }
 uint16_t    Client_Init::get_timeout()  const { return timeout; }
 uint8_t     Client_Init::get_retries()  const { return retries; }
 
-void Client_Init::set_protocol(std::string protocol) {
+void Client_Init::set_protocol(std::string protocol) 
+{
     if (protocol != "tcp" && protocol != "udp") {
         std::cerr << "Error: " << protocol << " is not valid\n";
         exit(ERR_INVALID);
@@ -22,26 +23,31 @@ void Client_Init::set_protocol(std::string protocol) {
     this->protocol = protocol;
 }
 
-void Client_Init::set_hostname(std::string host) { // TCP right now, no UDP in sight
+void Client_Init::set_hostname(std::string host) 
+{
     this->hostname = host;
 }
 
-void Client_Init::set_port(std::string port) {
+void Client_Init::set_port(std::string port) 
+{
     int p = Toolkit::catch_stoi(port, std::numeric_limits<uint16_t>::max(),"Ports");
     this->port = static_cast<uint16_t>(p);
 }
 
-void Client_Init::set_udp_timeout(std::string timeout) {
+void Client_Init::set_udp_timeout(std::string timeout) 
+{
     int t = Toolkit::catch_stoi(timeout, std::numeric_limits<uint16_t>::max(),"UDP timeout");
     this->timeout = static_cast<uint16_t>(t);
 }
 
-void Client_Init::set_udp_retries(std::string retries) {
+void Client_Init::set_udp_retries(std::string retries) 
+{
     int r = Toolkit::catch_stoi(retries, std::numeric_limits<uint8_t>::max(),"UDP retries");
     this->retries = static_cast<uint8_t>(r);
 }
 
-void Client_Init::print_help() {
+void Client_Init::print_help() 
+{
     std::cout << "Usage: ./ipk25chat-client -t <tcp|udp> -s <hostname|ip> [-p port] [-d timeout] [-r retries] [-h]\n\n"
     << "Options:\n"
     << "  -t <proto>     Set transport protocol (tcp or udp). Required.\n"
@@ -57,7 +63,8 @@ void Client_Init::print_help() {
     exit(0);
 }
 
-void Client_Init::validate() {
+void Client_Init::validate() 
+{
     printf_debug("Transport: %s", protocol.c_str());
     printf_debug("Hostname:        %s", hostname.c_str());
     printf_debug("Port:      %u", port);

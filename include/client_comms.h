@@ -11,6 +11,7 @@
 #include <cstring>
 #include <string>
 #include <optional>
+#include <vector>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -20,14 +21,14 @@
 #include <sys/time.h> // timeval struct
 
 #define BUFFER_SIZE 65536 // 64kb is 2^16 + 4
-#define TIMEOUT 5000 // 5 second timeout
+#define TIMEOUT 50000 // 5 second timeout
 
 class Client_Comms {
     public:
         int client_socket = -1;
         int get_socket(); // for FD_SET() in client_session
-        
-        Client_Comms(const std::string &hostname, const std::string &protocol, uint16_t port);
+        uint16_t next_msg_id();
+        Client_Comms(const std::string &hostname, bool protocol, uint16_t port);
 
         void connect_set();
         // TCP
@@ -36,11 +37,13 @@ class Client_Comms {
         void send_tcp_message(const std::string &msg);
         std::string receive_tcp_message();
         // 
-        std::optional<std::string> timed_reply(bool is_tcp = true);
+        std::optional<std::string> timed_tcp_reply();               // string for TCP
+        std::optional<std::vector<uint8_t>> timed_udp_reply();      // vector for UDP
+
         // UDP
         void set_udp();
-        void send_udp_message(const std::string &msg);
-        std::string receive_udp_message();
+        void send_udp_message(const std::vector<uint8_t>& pac);
+        std::vector<uint8_t> receive_udp_message();
 
 
         void terminate_connection(int ex_code = 0);
@@ -49,9 +52,15 @@ class Client_Comms {
         std::string host_name;
         std::string ip_address;
         sockaddr_in udp_address;
-        std::string tproto;
-        uint16_t port;
-        void receive_tcp_chunk();
+        sockaddr_in dynamic_address{}; // zeroed
+        bool has_dyn_addr = false;
 
+        bool tproto;
+        uint16_t port;
+
+        uint16_t msg_id_cnt = 0;
+        void receive_tcp_chunk();
+        void send_udp_packet(const std::vector<uint8_t>& pac);
+        std::vector<uint8_t> receive_udp_packet();
 
 };

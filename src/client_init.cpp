@@ -42,7 +42,7 @@ void Client_Init::set_udp_retries(std::string retries) {
 }
 
 void Client_Init::print_help() {
-    std::cout << "Usage: ./ipk25-chat -t <tcp|udp> -s <hostname|ip> [-p port] [-d timeout] [-r retries] [-h]\n\n"
+    std::cout << "Usage: ./ipk25chat-client -t <tcp|udp> -s <hostname|ip> [-p port] [-d timeout] [-r retries] [-h]\n\n"
     << "Options:\n"
     << "  -t <proto>     Set transport protocol (tcp or udp). Required.\n"
     << "  -s <server>    Set server IP address or hostname. Required.\n"
@@ -51,9 +51,9 @@ void Client_Init::print_help() {
     << "  -r <retries>   Set number of UDP retransmissions (default: 3).\n"
     << "  -h             Show this help message and exit.\n\n"
     << "Examples:\n"
-    << "  ./ipk25-chat -t tcp -s 127.0.0.1\n"
-    << "  ./ipk25-chat -t udp -s ipk.fit.vutbr.cz -p 10000\n"
-    << "  ./ipk25-chat -t udp -s 127.0.0.1 -p 3000 -d 100 -r 1\n";
+    << "  ./ipk25chat-client -t tcp -s 127.0.0.1\n"
+    << "  ./ipk25chat-client -t udp -s ipk.fit.vutbr.cz -p 10000\n"
+    << "  ./ipk25chat-client -t udp -s 127.0.0.1 -p 3000 -d 100 -r 1\n";
     exit(0);
 }
 

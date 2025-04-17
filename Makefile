@@ -3,7 +3,7 @@ CXXFLAGS = -Wall -Wextra -std=c++20 -Iinclude
 OPTFLAGS = -DDEBUG_PRINT
 debug: CXXFLAGS += $(OPTFLAGS)
 
-LDFLAGS = -lpcap -lpthread
+LDFLAGS = -lpcap
 
 SRC_DIR = src
 SRCS = $(wildcard $(SRC_DIR)/*.cpp)
@@ -16,8 +16,7 @@ all: $(TARGET)
 # Clean up object files after linking
 $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS) 
-
-#rm -f $(OBJS)
+	rm -f $(OBJS)
 
 # Compile source files into object files
 $(SRC_DIR)/%.o: $(SRC_DIR)/%.cpp

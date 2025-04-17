@@ -188,7 +188,12 @@ void Client_Session::send_auth(const std::vector<std::string>& args) {
     auto auth_msg = "AUTH " + username + " AS " + this->display_name + " USING " + secret + "\r\n"; 
     send_message(auth_msg); 
 
-    auto reply = comms->timed_reply(5000);
+    std::optional<std::string> reply;
+    if (config.get_protocol() == "tcp") {
+        reply = comms->timed_reply();
+    } else {
+        reply = comms->timed_reply(false);
+    }
     if (!reply) {
         std::cout << "ERROR: Authentication timed out.\n";
         graceful_exit();

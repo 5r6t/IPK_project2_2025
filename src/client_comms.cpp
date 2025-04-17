@@ -23,14 +23,21 @@ void Client_Comms::connect_set() {
     }
 }
 
-std::optional<std::string> Client_Comms::timed_reply(int timeout_ms, bool is_tcp) {
+void Client_Comms::terminate_connection(int ex_code) {
+    if (client_socket != -1) {
+        close(client_socket);
+    }
+    exit(ex_code);
+}
+
+std::optional<std::string> Client_Comms::timed_reply(bool is_tcp) {
     fd_set rfds;
     FD_ZERO(&rfds);
     FD_SET(client_socket, &rfds);
 
     struct timeval tv;
-    tv.tv_sec = timeout_ms / 1000;
-    tv.tv_usec = (timeout_ms % 1000) * 1000;
+    tv.tv_sec = TIMEOUT / 1000;
+    tv.tv_usec = (TIMEOUT % 1000) * 1000;
 
     int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
     if (ready <= 0) {
@@ -117,13 +124,6 @@ void Client_Comms::connect_tcp() {
     printf_debug("%s", "TCP Connected succesfully");
 }
 
-void Client_Comms::terminate_connection(int ex_code) {
-    if (client_socket != -1) {
-        close(client_socket);
-    }
-    exit(ex_code);
-}
-
 void Client_Comms::send_tcp_message(const std::string &msg) {
     int bytes_tx = send(this->client_socket, msg.c_str(), strlen(msg.c_str()), 0);
     if (bytes_tx < 0) {
@@ -148,13 +148,29 @@ std::string Client_Comms::receive_tcp_message() {
 void Client_Comms::receive_tcp_chunk() {
     printf_debug("Getting another TCP message chunk.");
 
+    struct timeval tv;
+    tv.tv_sec = TIMEOUT / 1000;
+    tv.tv_usec = (TIMEOUT % 1000) * 1000;
+    setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
     char temp[BUFFER_SIZE];
     int bytes_rx = recv(client_socket, temp, BUFFER_SIZE - 1, 0);
-    
+
+    tv.tv_sec = 0; tv.tv_usec = 0; // reset timeout
+    setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
     if (bytes_rx < 0) {
-        perror("ERROR: recv");
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            temp[bytes_rx] = '\0';
+            std::cerr << "ERROR: Incomplete message received:" << temp << "\n";
+            send_tcp_message("ERR FROM " + this->ip_address + " IS incomplete message\r\n");
+            terminate_connection(ERR_SERVER);
+        } else {
+            perror("ERROR: recv");
+        }
         return;
     }
+    
     if (bytes_rx == 0) {
         std::cout << "ERROR: Server has closed the connection\n."; // nowhere to send BYE
         terminate_connection(ERR_SERVER);

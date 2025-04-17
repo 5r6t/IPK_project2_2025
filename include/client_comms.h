@@ -36,7 +36,7 @@ class Client_Comms {
         void send_tcp_message(const std::string &msg);
         std::string receive_tcp_message();
         // 
-        std::optional<std::string> timed_reply(int timeout_ms=TIMEOUT, bool is_tcp = true);
+        std::optional<std::string> timed_reply(bool is_tcp = true);
         // UDP
         void set_udp();
         void send_udp_message(const std::string &msg);

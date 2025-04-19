@@ -50,15 +50,13 @@ void Toolkit::append_uint8(std::vector<uint8_t>& buf, uint8_t value)
 
 /**
  * @brief function to spread 2bytes into vector<uint8_t> in network byte order
- * 1. htons for network byte order
- * 2. ">> 8"  --> high byte, other bits 0
- * 3. low byte, other bits 0
  */
 void Toolkit::append_uint16(std::vector<uint8_t>& buf, uint16_t value) 
 {
-    uint16_t val_net_order = htons(value);
-    buf.push_back((val_net_order >> 8) & 0x00FF);
-    buf.push_back(val_net_order & 0x00FF);
+    uint16_t net = htons(value);
+    auto ptr = reinterpret_cast<uint8_t*>(&net);
+    buf.push_back(ptr[0]);
+    buf.push_back(ptr[1]);
 }
 void Toolkit::append_string(std::vector<uint8_t>& buf, const std::string& s) 
 {

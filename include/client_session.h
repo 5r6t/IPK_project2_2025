@@ -9,6 +9,7 @@
 
 #include <string>
 #include <vector>
+#include <set>
 
 #include <iostream>
 #include <sstream>
@@ -84,4 +85,5 @@ class Client_Session {
         void handle_udp_bye     (const std::vector<uint8_t>& pac);
         void handle_udp_ping    (const std::vector<uint8_t>& pac);
 
+        std::set<uint16_t> processed_udp_ids;
 };

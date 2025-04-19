@@ -44,6 +44,10 @@ void Client_Session::graceful_exit(int ex_code) {
         std::string bye_msg = "BYE FROM " + this->display_name + "\r\n";
         comms->send_tcp_message(bye_msg);
     }
+    else {
+        auto bye_msg = Toolkit::build_bye(comms->next_msg_id(), this->display_name);
+        send_message(bye_msg);
+    }
     comms->terminate_connection(ex_code);  // closes socket and exits
 }
 
@@ -409,25 +413,41 @@ std::optional<Client_Session::ParsedMessage> Client_Session::parse_tcp_message(c
 }
 
 void Client_Session::handle_udp_response(const std::vector<uint8_t>& pac) {
-    if (pac.empty()) {
-        std::cerr << "ERROR: Empty UDP packet received\n";
+    if (pac.size() < 3) {
+        std::cerr << "ERROR: Empty or malformed UDP packet received\n";
+        return;
+    }
+    
+    uint8_t type = pac[0];
+    uint16_t msg_id = (pac[1] << 8) | pac[2];
+
+    if (this->processed_udp_ids.contains(msg_id)) {
+        comms->send_udp_message(Toolkit::build_confirm(msg_id));
+        printf_debug("Received duplicate msg_id: %d. Resent confirm", msg_id);
         return;
     }
 
-    uint8_t type = pac[0];
 
     switch (type) {
         case 0x00: return handle_udp_confirm(pac);
-        case 0x01: return handle_udp_reply(pac);
+        case 0x01: handle_udp_reply(pac); break;
         //case 0x03: return handle_udp_join(pac); // server shouldn't sent that
-        case 0x04: return handle_udp_msg(pac);
-        case 0xFD: return handle_udp_ping(pac);
-        //case 0xFE: return handle_udp_err(pac);
-        case 0xFF: return handle_udp_bye(pac);
+        case 0x04: handle_udp_msg(pac); break;
+        case 0xFD: handle_udp_ping(pac); break;
+        case 0xFE: handle_udp_err(pac); break;
+        case 0xFF: handle_udp_bye(pac); break;
         default:
-            std::cerr << "ERROR: Unknown UDP packet type: " << int(type) << "\n";
+            std::cout << "ERROR: Unknown UDP packet type: " << int(type) << "\n";
+            comms->send_udp_message(Toolkit::build_confirm(msg_id));
+            auto err_msg = Toolkit::build_msg(
+                                comms->next_msg_id(), this->display_name,
+                                "ERROR: Unknown UDP packet type", true
+                            );
+            comms->send_udp_message(err_msg);
             break;
     }
+    processed_udp_ids.insert(msg_id);
+
 }
 
 void Client_Session::handle_udp_confirm(const std::vector<uint8_t>& pac) {
@@ -451,8 +471,7 @@ void Client_Session::handle_udp_reply(const std::vector<uint8_t>& pac) {
         std::cout << "Action Success: " << msg_content << "\n";
     }
 
-    auto confirm = Toolkit::build_confirm(ref_msg_id);
-    comms->send_udp_message(confirm);
+    comms->send_udp_message(Toolkit::build_confirm(msg_id));
     
     if (state == ClientState::Auth) {
         state = (result == 1 ? ClientState::Open : ClientState::Start);
@@ -479,22 +498,40 @@ void Client_Session::handle_udp_msg(const std::vector<uint8_t>& pac) {
     }
     std::cout << disp_name << ": " << msg_content << std::endl;
 
-    auto confirm = Toolkit::build_confirm(msg_id);
-    comms->send_udp_message(confirm);
+    comms->send_udp_message(Toolkit::build_confirm(msg_id));
 }
 
 void Client_Session::handle_udp_ping(const std::vector<uint8_t>& pac) {
     printf_debug("Pinged ^w^");
     uint16_t msg_id = (pac[1] << 8) | pac[2];
-    auto confirm_pac = Toolkit::build_confirm(msg_id);
-    comms->send_udp_message(confirm_pac);
+    comms->send_udp_message(Toolkit::build_confirm(msg_id));
+}
+
+void Client_Session::handle_udp_err(const std::vector<uint8_t>& pac) {
+    printf_debug("Receiving ");
+    uint16_t msg_id = (pac[1] << 8) | pac[2];
+    std::string disp_name;
+    std::string msg_content;
+
+    size_t pos = 3;
+    while(pos < pac.size() && pac[pos] != 0x00) {
+        disp_name += static_cast<char>(pac[pos]);
+        pos++;
+    }
+    for(pos++; pos < pac.size() && pac[pos] != 0x00; pos++) {
+        msg_content += static_cast<char>(pac[pos]);
+    }
+    std::cout << "ERROR FROM " << disp_name << ": " << msg_content << std::endl;
+
+    comms->send_udp_message(Toolkit::build_confirm(msg_id));
+
 }
 
 void Client_Session::handle_udp_bye(const std::vector<uint8_t>& pac) {
     // server sent bye
     uint16_t ref_msg_id = (pac[1] << 8) | pac[2];
     comms->send_udp_message(Toolkit::build_confirm(ref_msg_id));
-    comms->receive_udp_message(); // maybe like in run instead???? check after having enough sleep
+    //comms->receive_udp_message(); // maybe like in run instead???? check after having enough sleep
     // confirm bye either received or timed out
     // wait for possible retransmit - if 
     printf_debug("ending program");

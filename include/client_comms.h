@@ -36,6 +36,7 @@ class Client_Comms {
         void connect_tcp();
         void send_tcp_message(const std::string &msg);
         std::string receive_tcp_message();
+        void receive_tcp_chunk();
         // 
         std::optional<std::string> timed_tcp_reply();               // string for TCP
         std::optional<std::vector<uint8_t>> timed_udp_reply();      // vector for UDP
@@ -59,7 +60,6 @@ class Client_Comms {
         uint16_t port;
 
         uint16_t msg_id_cnt = 0;
-        void receive_tcp_chunk();
         void send_udp_packet(const std::vector<uint8_t>& pac);
         std::vector<uint8_t> receive_udp_packet();
 };

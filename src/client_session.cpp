@@ -83,9 +83,9 @@ void Client_Session::run(){
 
         if (FD_ISSET(comms->get_socket(), &rfds)) {
             if (config.is_tcp()) {
-                std::string tcp_msg = comms->receive_tcp_message();
-                handle_tcp_response(tcp_msg);
-                /*
+                comms->receive_tcp_chunk();
+                //handle_tcp_response(tcp_msg);
+                
                 while (true) {
                     size_t pos = comms->buffer.find("\r\n");
                     if (pos == std::string::npos) break;
@@ -94,7 +94,7 @@ void Client_Session::run(){
                     comms->buffer.erase(0, pos + 2);
                     handle_tcp_response(msg);
                 }
-                */
+                
             } else {
                 std::vector<uint8_t> udp_msg = comms->receive_udp_message();
                 handle_udp_response(udp_msg);

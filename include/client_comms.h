@@ -62,5 +62,4 @@ class Client_Comms {
         void receive_tcp_chunk();
         void send_udp_packet(const std::vector<uint8_t>& pac);
         std::vector<uint8_t> receive_udp_packet();
-
 };

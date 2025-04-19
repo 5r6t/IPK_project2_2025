@@ -62,16 +62,26 @@ class Client_Session {
         void print_local_help();
         void send_auth(const std::vector<std::string>& args);
         void send_join(const std::vector<std::string>& args);
-        void rename(const std::vector<std::string>& args);
+        void rename   (const std::vector<std::string>& args);
 
         static void handle_sigint(int);
         void graceful_exit(int ex_code = 0);                
 
         void send_message(const std::string& msg);  // junction function between protocols
         void send_message(const std::vector<uint8_t>& msg);  // junction function between protocols
-        std::string receive_message();              // junction function between protocols
 
         bool check_message_content(const std::string &content, msg_param param);
-        void handle_server_message(std::string &msg);
-        std::optional<ParsedMessage> parse_message(const std::string &msg);
+        void handle_tcp_response(std::string &msg);
+        std::optional<ParsedMessage> parse_tcp_message(const std::string &msg);
+
+        void handle_udp_response(const std::vector<uint8_t>& pac); // junction for functions bellow
+        void handle_udp_confirm (const std::vector<uint8_t>& pac);
+        void handle_udp_reply   (const std::vector<uint8_t>& pac);
+        void handle_udp_auth    (const std::vector<uint8_t>& pac);
+        void handle_udp_join    (const std::vector<uint8_t>& pac);
+        void handle_udp_msg     (const std::vector<uint8_t>& pac);
+        void handle_udp_err     (const std::vector<uint8_t>& pac);
+        void handle_udp_bye     (const std::vector<uint8_t>& pac);
+        void handle_udp_ping    (const std::vector<uint8_t>& pac);
+
 };

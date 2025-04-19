@@ -111,8 +111,6 @@ std::vector<uint8_t> Toolkit::build_join (
     return packet;
 }
 
-// err is identical to msg, except msg_type  
-// -> argument is_error has been added
 /**
  * @brief function to put data in vector<uint8_t>
  * @param is_error if true, replaces msg_type with err type

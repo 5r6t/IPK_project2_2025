@@ -20,6 +20,7 @@
 * https://www.oreilly.com/library/view/hands-on-network-programming/9781789349863/8e8ea0c3-cf7f-46c0-bd6f-5c7aa6eaa366.xhtml -- timeout
 * https://pubs.opengroup.org/onlinepubs/000095399/functions/setsockopt.html -- decided to not use
 
+//* https://stackoverflow.com/questions/41893303/convert-usigned-integer-uint16-t-to-string-standard-itoa-base-10-is-giving-ne -- converting uint16_t
 ## Notes and more
 - break; // first resolved address is used -> add to documentation?
 

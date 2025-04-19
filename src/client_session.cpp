@@ -64,10 +64,8 @@ void Client_Session::run(){
         int max_fd = std::max(STDIN_FILENO, comms->get_socket()) + 1;
         printf_debug("Waiting on stdin (%d) and socket (%d)", STDIN_FILENO, comms->get_socket());
         int active = select(max_fd, &rfds, nullptr, nullptr, nullptr);
-        if (FD_ISSET(comms->get_socket(), &rfds)) {
-            printf_debug("%s","Socket ready for read");
-        }
-        if (active < 0) { // select failed
+
+        if (active < 0) {
             perror("Select");
             break;
         }
@@ -79,19 +77,29 @@ void Client_Session::run(){
     
             if (cmd_buffer.empty()) continue;
     
-            if (cmd_buffer[0] == '/') {
-                handle_command(cmd_buffer);
-            } else {
-                
-                handle_chat_msg(cmd_buffer);
-            }
+            if (cmd_buffer[0] == '/') { handle_command(cmd_buffer); } 
+            else {  handle_chat_msg(cmd_buffer); }
         }
 
         if (FD_ISSET(comms->get_socket(), &rfds)) {
-            std::string msg = receive_message();
-            handle_server_message(msg);
+            if (config.is_tcp()) {
+                std::string tcp_msg = comms->receive_tcp_message();
+                handle_tcp_response(tcp_msg);
+                /*
+                while (true) {
+                    size_t pos = comms->buffer.find("\r\n");
+                    if (pos == std::string::npos) break;
+                
+                    std::string msg = comms->buffer.substr(0, pos);
+                    comms->buffer.erase(0, pos + 2);
+                    handle_tcp_response(msg);
+                }
+                */
+            } else {
+                std::vector<uint8_t> udp_msg = comms->receive_udp_message();
+                handle_udp_response(udp_msg);
+            }
         }
-        
         if (stop_requested) break;
     }
 }
@@ -173,7 +181,7 @@ void Client_Session::send_auth(const std::vector<std::string>& args)
         auto auth_msg = Toolkit::build_auth(msg_id, username, 
                                             this->display_name, secret);
         send_message(auth_msg);
-        udp_reply = comms->timed_udp_reply();
+        udp_reply = comms->receive_udp_message();
     }
 
     if (!tcp_reply && !udp_reply) {
@@ -183,10 +191,10 @@ void Client_Session::send_auth(const std::vector<std::string>& args)
     }
     if (config.is_tcp()) {
         std::string tcp_confirmation = *tcp_reply;
-        handle_server_message(tcp_confirmation);
+        handle_tcp_response(tcp_confirmation);
     } else {
         std::vector<uint8_t> udp_confirmation = *udp_reply;
-        //handle_server_message(udp_confirmation);
+        handle_udp_response(udp_confirmation);
     }
 }
 
@@ -237,10 +245,10 @@ void Client_Session::send_join(const std::vector<std::string>& args)
 
     if (config.is_tcp()) {
         std::string tcp_confirmation = *tcp_reply;
-        handle_server_message(tcp_confirmation);
+        handle_tcp_response(tcp_confirmation);
     } else {
         std::vector<uint8_t> udp_confirmation = *udp_reply;
-        //handle_server_message(udp_confirmation);
+        handle_udp_response(udp_confirmation);
     }
 }
 
@@ -295,21 +303,8 @@ void Client_Session::send_message(const std::vector<uint8_t>& msg) {
     printf_debug("About to send UDP message");
     comms->send_udp_message(msg);
 }
-
-std::string Client_Session::receive_message() {
-    std::string msg;
-    if(config.is_tcp()) {
-        msg = comms->receive_tcp_message();
-    } else {
-        /* udp */
-        printf_debug("UDP receive not implemented yet");
-        msg = "";
-    }
-    return msg;
-}
-
-void Client_Session::handle_server_message(std::string &msg) {
-    auto parsed_opt = parse_message(msg);
+void Client_Session::handle_tcp_response(std::string &msg) {
+    auto parsed_opt = parse_tcp_message(msg);
     if (!parsed_opt) {
         std::cout << "ERROR: Malformed message received: " << msg << "\n";
         std::string err = "ERR FROM " + this->display_name + " IS invalid message\r\n";
@@ -370,22 +365,18 @@ void Client_Session::handle_server_message(std::string &msg) {
     }
 }
 
-std::optional<Client_Session::ParsedMessage> Client_Session::parse_message(const std::string &msg) 
+std::optional<Client_Session::ParsedMessage> Client_Session::parse_tcp_message(const std::string &msg) 
 {
-    ParsedMessage result;
     printf_debug("Parsing message: %s", msg.c_str());
 
-    // Handle positive reply
-    if (msg.starts_with("REPLY OK IS ")) {
-        result.type = "REPLY OK";
-        result.content = msg.substr(strlen("REPLY OK IS "));
+    ParsedMessage result;
 
-    // Handle negative reply
-    } else if (msg.starts_with("REPLY NOK IS ")) {
-        result.type = "REPLY NOK";
-        result.content = msg.substr(strlen("REPLY NOK IS "));
+    if (msg.starts_with("REPLY OK IS ") || msg.starts_with("REPLY NOK IS ")) {
+        bool is_ok = msg.starts_with("REPLY OK IS ");
+        result.type = is_ok ? "REPLY OK" : "REPLY NOK";
+        size_t prefix_len = is_ok ? strlen("REPLY OK IS ") : strlen("REPLY NOK IS ");
+        result.content = msg.substr(prefix_len);
 
-    // Handle regular chat message
     } else if (msg.starts_with("MSG FROM ")) {
         result.type = "MSG";
         size_t from_pos = strlen("MSG FROM ");
@@ -395,7 +386,6 @@ std::optional<Client_Session::ParsedMessage> Client_Session::parse_message(const
             result.content = msg.substr(is_pos + 4);
         }
 
-    // Handle error message
     } else if (msg.starts_with("ERR FROM ")) {
         result.type = "ERR";
         size_t from_pos = strlen("ERR FROM ");
@@ -405,11 +395,59 @@ std::optional<Client_Session::ParsedMessage> Client_Session::parse_message(const
             result.content = msg.substr(is_pos + 4);
         }
 
-    // Handle disconnect message
     } else if (msg.starts_with("BYE FROM ")) {
         result.type = "BYE";
         result.display_name = msg.substr(strlen("BYE FROM "));
     }
 
     return result;
+}
+
+void Client_Session::handle_udp_response(const std::vector<uint8_t>& pac) {
+    if (pac.empty()) {
+        std::cerr << "ERROR: Empty UDP packet received\n";
+        return;
+    }
+
+    uint8_t type = pac[0];
+
+    switch (type) {
+        //case 0x00: return handle_udp_confirm(pac);
+        case 0x01: return handle_udp_reply(pac);
+        //case 0x03: return handle_udp_join(pac);
+        //case 0x04: return handle_udp_msg(pac);
+        case 0xFD: return handle_udp_ping(pac);
+        //case 0xFE: return handle_udp_err(pac);
+        case 0xFF: return handle_udp_bye(pac);
+        default:
+            std::cerr << "ERROR: Unknown UDP packet type: " << int(type) << "\n";
+            break;
+    }
+}
+
+void Client_Session::handle_udp_reply(const std::vector<uint8_t>& pac) {
+    // server sent bye
+    // confirm bye received
+    // wait for possible retransmit
+    uint8_t result = pac[3]; 
+    if (result == 0) {
+        printf_debug("Nok'd");
+    } else {
+        printf_debug("Ok'd");
+    }
+}
+
+void Client_Session::handle_udp_ping(const std::vector<uint8_t>& pac) {
+    printf_debug("Pinged ^w^");
+    uint16_t msg_id = (pac[1] << 8) | pac[2];
+    auto confirm_pac = Toolkit::build_confirm(msg_id);
+    comms->send_udp_message(confirm_pac);
+}
+
+void Client_Session::handle_udp_bye(const std::vector<uint8_t>& pac) {
+    // server sent bye
+    // confirm bye received
+    // wait for possible retransmit
+    printf_debug("ending program");
+    graceful_exit(0);
 }

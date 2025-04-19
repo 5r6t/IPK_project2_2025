@@ -105,17 +105,22 @@ void Client_Session::run(){
 }
 
 void Client_Session::handle_chat_msg(const std::string &line) {
+    printf_debug("sending MSG %s ...", line.c_str());
+    
     if (this->state != ClientState::Open) {
         std::cout << "ERROR: You must authenticate first. See '/help'.\n";
         return;
     }
-    if (check_message_content(line, MessageContent)) {
-        printf_debug("sending MSG %s ...", line.c_str());
+    if (!check_message_content(line, MessageContent)) {
+        std::cout << "ERROR: Invalid format of MessageContent, try again.\n";
+        return;
+    }
+    if (config.is_tcp()) {
         // MSG FROM {DisplayName} IS {MessageContent}\r\n
         std::string msg = "MSG FROM " + this->display_name + " IS " + line + "\r\n";
         send_message(msg);    
     } else {
-        std::cout << "ERROR: Invalid format of MessageContent, try again.\n";
+        send_message(Toolkit::build_msg(comms->next_msg_id(), this->display_name, line));
     }
 }
 
@@ -412,10 +417,10 @@ void Client_Session::handle_udp_response(const std::vector<uint8_t>& pac) {
     uint8_t type = pac[0];
 
     switch (type) {
-        //case 0x00: return handle_udp_confirm(pac);
+        case 0x00: return handle_udp_confirm(pac);
         case 0x01: return handle_udp_reply(pac);
-        //case 0x03: return handle_udp_join(pac);
-        //case 0x04: return handle_udp_msg(pac);
+        //case 0x03: return handle_udp_join(pac); // server shouldn't sent that
+        case 0x04: return handle_udp_msg(pac);
         case 0xFD: return handle_udp_ping(pac);
         //case 0xFE: return handle_udp_err(pac);
         case 0xFF: return handle_udp_bye(pac);
@@ -425,16 +430,57 @@ void Client_Session::handle_udp_response(const std::vector<uint8_t>& pac) {
     }
 }
 
-void Client_Session::handle_udp_reply(const std::vector<uint8_t>& pac) {
-    // server sent bye
-    // confirm bye received
-    // wait for possible retransmit
-    uint8_t result = pac[3]; 
-    if (result == 0) {
-        printf_debug("Nok'd");
-    } else {
-        printf_debug("Ok'd");
+void Client_Session::handle_udp_confirm(const std::vector<uint8_t>& pac) {
+    uint16_t msg_id = (pac[1] <<8 | pac[2]);
+    printf_debug("Received CONFIRM for msg_id: %d", msg_id);
+}
+
+void Client_Session::handle_udp_reply(const std::vector<uint8_t>& pac) { 
+    uint16_t msg_id = (pac[1] << 8) | pac[2];
+    uint8_t result = pac[3];
+    uint16_t ref_msg_id = (pac[4] << 8) | pac[5];
+    std::string msg_content;
+    
+    for (size_t i = 6; i < pac.size() && pac[i] != 0x00; ++i) {
+        msg_content += static_cast<char>(pac[i]);
     }
+
+    if (result == 0) {
+        std::cout << "Action Failure: " << msg_content << "\n";
+    } else { // Assuming the other number is one
+        std::cout << "Action Success: " << msg_content << "\n";
+    }
+
+    auto confirm = Toolkit::build_confirm(ref_msg_id);
+    comms->send_udp_message(confirm);
+    
+    if (state == ClientState::Auth) {
+        state = (result == 1 ? ClientState::Open : ClientState::Start);
+    } else if (state == ClientState::Join) {
+        state = ClientState::Open;
+    } else {
+        graceful_exit(ERR_SERVER);
+    }    
+}
+
+void Client_Session::handle_udp_msg(const std::vector<uint8_t>& pac) {
+    printf_debug("Receiving ");
+    uint16_t msg_id = (pac[1] << 8) | pac[2];
+    std::string disp_name;
+    std::string msg_content;
+
+    size_t pos = 3;
+    while(pos < pac.size() && pac[pos] != 0x00) {
+        disp_name += static_cast<char>(pac[pos]);
+        pos++;
+    }
+    for(pos++; pos < pac.size() && pac[pos] != 0x00; pos++) {
+        msg_content += static_cast<char>(pac[pos]);
+    }
+    std::cout << disp_name << ": " << msg_content << std::endl;
+
+    auto confirm = Toolkit::build_confirm(msg_id);
+    comms->send_udp_message(confirm);
 }
 
 void Client_Session::handle_udp_ping(const std::vector<uint8_t>& pac) {
@@ -446,8 +492,11 @@ void Client_Session::handle_udp_ping(const std::vector<uint8_t>& pac) {
 
 void Client_Session::handle_udp_bye(const std::vector<uint8_t>& pac) {
     // server sent bye
-    // confirm bye received
-    // wait for possible retransmit
+    uint16_t ref_msg_id = (pac[1] << 8) | pac[2];
+    comms->send_udp_message(Toolkit::build_confirm(ref_msg_id));
+    comms->receive_udp_message(); // maybe like in run instead???? check after having enough sleep
+    // confirm bye either received or timed out
+    // wait for possible retransmit - if 
     printf_debug("ending program");
     graceful_exit(0);
 }

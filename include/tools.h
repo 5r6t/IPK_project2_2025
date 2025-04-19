@@ -71,7 +71,7 @@ class Toolkit
         );
 
         // err is identical to msg, except msg_type  
-        // -> argument is_error has been added
+        // thus is_error has been added
         static std::vector<uint8_t> build_msg (
             uint16_t msg_id,
             const std::string& display_name,

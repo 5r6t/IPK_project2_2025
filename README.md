@@ -47,6 +47,6 @@
 ```
 
 # Conclusion
-This document essentially does not advance the state of human knowledge in any way. I hope one day I'll have saved enough to isolate myself in the mountains. But all I do is run for cover...
+This document essentially does not advance the state of human knowledge in any way. I hope one day I'll have saved enough to isolate myself in the mountains.
 
-Todays song: Mercy - Dotan
+**Todays song:** Auld Lang Syne - Port Sulphur Band

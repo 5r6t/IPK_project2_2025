@@ -21,14 +21,14 @@
 #include <sys/time.h> // timeval struct
 
 #define BUFFER_SIZE 65536 // 64kb is 2^16 + 4
-#define TIMEOUT 50000 // 5 second timeout
+#define TCP_TIMEOUT 5000 // 5 second timeout
 
 class Client_Comms {
     public:
         int client_socket = -1;
         int get_socket(); // for FD_SET() in client_session
         uint16_t next_msg_id();
-        Client_Comms(const std::string &hostname, bool protocol, uint16_t port);
+        Client_Comms(const std::string &hostname, bool protocol, uint16_t port, uint16_t timeout);
 
         void connect_set();
         // TCP
@@ -58,7 +58,7 @@ class Client_Comms {
 
         bool tproto;
         uint16_t port;
-
+        uint16_t udp_timeout;
         uint16_t msg_id_cnt = 0;
         void send_udp_packet(const std::vector<uint8_t>& pac);
         std::vector<uint8_t> receive_udp_packet();

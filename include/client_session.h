@@ -70,7 +70,7 @@ class Client_Session {
 
         void send_message(const std::string& msg);  // junction function between protocols
         void send_message(const std::vector<uint8_t>& msg);  // junction function between protocols
-
+        bool send_with_retries(const std::vector<uint8_t>& msg,uint16_t msg_id); // used for udp retries
         bool check_message_content(const std::string &content, msg_param param);
         void handle_tcp_response(std::string &msg);
         std::optional<ParsedMessage> parse_tcp_message(const std::string &msg);
@@ -85,5 +85,5 @@ class Client_Session {
         void handle_udp_bye     (const std::vector<uint8_t>& pac);
         void handle_udp_ping    (const std::vector<uint8_t>& pac);
 
-        std::set<uint16_t> processed_udp_ids;
+        std::set<uint16_t> processed_ids;
 };

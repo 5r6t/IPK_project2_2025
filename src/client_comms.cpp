@@ -8,8 +8,8 @@
 #include "client_comms.h"
 #include "tools.h"
 
-Client_Comms::Client_Comms(const std::string &hostname, bool protocol, uint16_t port)
-    : host_name(hostname), tproto(protocol), port(port) {}
+Client_Comms::Client_Comms(const std::string &hostname, bool protocol, uint16_t port, uint16_t timeout)
+    : host_name(hostname), tproto(protocol), port(port), udp_timeout(timeout){}
 
 int Client_Comms::get_socket() {
     return this->client_socket;
@@ -41,8 +41,8 @@ std::optional<std::string> Client_Comms::timed_tcp_reply()
     FD_SET(client_socket, &rfds);
 
     struct timeval tv;
-    tv.tv_sec = TIMEOUT / 1000;
-    tv.tv_usec = (TIMEOUT % 1000) * 1000;
+    tv.tv_sec = TCP_TIMEOUT / 1000;
+    tv.tv_usec = (TCP_TIMEOUT % 1000) * 1000;
 
     int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
     if (ready <= 0) {
@@ -59,8 +59,8 @@ std::optional<std::vector<uint8_t>> Client_Comms::timed_udp_reply()
     FD_SET(client_socket, &rfds);
 
     struct timeval tv;
-    tv.tv_sec = TIMEOUT / 1000;
-    tv.tv_usec = (TIMEOUT % 1000) * 1000;
+    tv.tv_sec =  this->udp_timeout / 1000;
+    tv.tv_usec = (this->udp_timeout % 1000) * 1000;
 
     int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
     if (ready <= 0) {
@@ -178,8 +178,8 @@ void Client_Comms::receive_tcp_chunk() {
     FD_SET(client_socket, &rfds);
 
     struct timeval tv;
-    tv.tv_sec = TIMEOUT / 1000;
-    tv.tv_usec = (TIMEOUT % 1000) * 1000;
+    tv.tv_sec = TCP_TIMEOUT / 1000;
+    tv.tv_usec = (TCP_TIMEOUT % 1000) * 1000;
 
     int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
     if (ready <= 0) {

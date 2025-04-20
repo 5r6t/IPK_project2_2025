@@ -14,8 +14,9 @@ Client_Session::Client_Session(const Client_Init &config)
     : config(config) {
     active_instance = this;
     this->comms = std::make_unique<Client_Comms>(
-        config.get_hostname(), config.is_tcp(), config.get_port());
-}
+        config.get_hostname(), config.is_tcp(), config.get_port(),
+        config.get_timeout());
+    }
 
 std::atomic<bool> stop_requested = false;
 
@@ -50,7 +51,6 @@ void Client_Session::graceful_exit(int ex_code) {
     }
     comms->terminate_connection(ex_code);  // closes socket and exits
 }
-
 
 void Client_Session::run(){
     fd_set rfds;
@@ -124,7 +124,13 @@ void Client_Session::handle_chat_msg(const std::string &line) {
         std::string msg = "MSG FROM " + this->display_name + " IS " + line + "\r\n";
         send_message(msg);    
     } else {
-        send_message(Toolkit::build_msg(comms->next_msg_id(), this->display_name, line));
+        uint16_t msg_id = comms->next_msg_id();
+        auto msg = Toolkit::build_msg(msg_id, this->display_name, line);
+
+        if (!send_with_retries(msg, msg_id)) {
+            graceful_exit(ERR_TIMEOUT);
+            return;
+        }
     }
 }
 
@@ -185,25 +191,23 @@ void Client_Session::send_auth(const std::vector<std::string>& args)
                         + " USING " + secret + "\r\n"; 
         send_message(auth_msg); 
         tcp_reply = comms->timed_tcp_reply(); 
+        
+        if (!tcp_reply) {
+            std::cout << "ERROR: Authentication timed out.\n";
+            graceful_exit();
+            return;
+        }
+        std::string tcp_confirmation = *tcp_reply;
+        handle_tcp_response(tcp_confirmation);
     } else {
         auto msg_id = comms->next_msg_id();
         auto auth_msg = Toolkit::build_auth(msg_id, username, 
                                             this->display_name, secret);
-        send_message(auth_msg);
-        udp_reply = comms->receive_udp_message();
-    }
-
-    if (!tcp_reply && !udp_reply) {
-        std::cout << "ERROR: Authentication timed out.\n";
-        graceful_exit();
-        return;
-    }
-    if (config.is_tcp()) {
-        std::string tcp_confirmation = *tcp_reply;
-        handle_tcp_response(tcp_confirmation);
-    } else {
-        std::vector<uint8_t> udp_confirmation = *udp_reply;
-        handle_udp_response(udp_confirmation);
+        
+        if (!send_with_retries(auth_msg, msg_id)) {
+            graceful_exit(ERR_TIMEOUT);
+            return;
+        }
     }
 }
 
@@ -224,40 +228,35 @@ void Client_Session::send_join(const std::vector<std::string>& args)
     this->state = ClientState::Join;
 
     auto channel_id = args.at(0);
-    if (!check_message_content(channel_id, ChannelID)) 
+    if (check_message_content(channel_id, ChannelID)) 
     {   // JOIN {ChannelID} AS {DisplayName}\r\n
         std::cout << "ERROR: Invalid ChannelID format, try again.\n";
         return;
     }
-
+ 
     std::optional<std::string> tcp_reply;
-    std::optional<std::vector<uint8_t>> udp_reply;
 
     if (config.is_tcp()) 
     {
         auto join_msg = "JOIN " + args.at(0) + " AS " + this->display_name + "\r\n"; 
         send_message(join_msg);
+        
         tcp_reply = comms->timed_tcp_reply();
-    } else {
-        auto msg_id = comms->next_msg_id();
-        auto join_msg = Toolkit::build_join(msg_id, channel_id, this->display_name);
-        send_message(join_msg);
-        udp_reply = comms->timed_udp_reply();   
-    }
-
-    if (!tcp_reply && !udp_reply) 
-    {
-        std::cout << "ERROR: Join timed out.\n";
-        graceful_exit(ERR_TIMEOUT);
-        return;
-    }
-
-    if (config.is_tcp()) {
+        if (!tcp_reply) {
+            std::cout << "ERROR: Authentication timed out.\n";
+            graceful_exit();
+            return;
+        }
         std::string tcp_confirmation = *tcp_reply;
         handle_tcp_response(tcp_confirmation);
     } else {
-        std::vector<uint8_t> udp_confirmation = *udp_reply;
-        handle_udp_response(udp_confirmation);
+        auto msg_id = comms->next_msg_id();
+        auto join_msg = Toolkit::build_join(msg_id, channel_id, this->display_name);
+        
+        if (!send_with_retries(join_msg, msg_id)) {
+            graceful_exit(ERR_TIMEOUT);
+            return;
+        }     
     }
 }
 
@@ -312,6 +311,31 @@ void Client_Session::send_message(const std::vector<uint8_t>& msg) {
     printf_debug("About to send UDP message");
     comms->send_udp_message(msg);
 }
+
+bool Client_Session::send_with_retries(const std::vector<uint8_t>& msg, uint16_t msg_id) {
+    for (int i = 0; i < config.get_retries(); ++i) {
+        comms->send_udp_message(msg);
+
+        auto reply = comms->timed_udp_reply();
+        if (reply.has_value()) {
+            handle_udp_response(*reply); // this will confirm state change
+            return true;
+        }
+        printf_debug("Retry %d for msg_id %d", i + 1, msg_id);
+    }
+
+    std::cerr << "ERROR: No reply for msg_id " << msg_id << ", giving up.\n";
+    return false;
+}
+
+/**
+ *   MMMMMMM   OOOO  HHHH
+ *      H     O      H   H
+ *      H     O      HHHHH
+ *      H     O      H 
+ *      H      OOOO  H
+*/
+
 void Client_Session::handle_tcp_response(std::string &msg) {
     auto parsed_opt = parse_tcp_message(msg);
     if (!parsed_opt) {
@@ -412,6 +436,14 @@ std::optional<Client_Session::ParsedMessage> Client_Session::parse_tcp_message(c
     return result;
 }
 
+/**
+  *   H    H  HOOOO   HHHO
+  *   H    H  H    O  H   H
+  *   H    H  H    O  HHHHO
+  *   O    O  H    O  H
+  *    OOOO   HOOOO   H
+*/
+
 void Client_Session::handle_udp_response(const std::vector<uint8_t>& pac) {
     if (pac.size() < 3) {
         std::cerr << "ERROR: Empty or malformed UDP packet received\n";
@@ -421,7 +453,7 @@ void Client_Session::handle_udp_response(const std::vector<uint8_t>& pac) {
     uint8_t type = pac[0];
     uint16_t msg_id = (pac[1] << 8) | pac[2];
 
-    if (this->processed_udp_ids.contains(msg_id)) {
+    if (this->processed_ids.contains(msg_id)) {
         comms->send_udp_message(Toolkit::build_confirm(msg_id));
         printf_debug("Received duplicate msg_id: %d. Resent confirm", msg_id);
         return;
@@ -439,15 +471,14 @@ void Client_Session::handle_udp_response(const std::vector<uint8_t>& pac) {
         default:
             std::cout << "ERROR: Unknown UDP packet type: " << int(type) << "\n";
             comms->send_udp_message(Toolkit::build_confirm(msg_id));
-            auto err_msg = Toolkit::build_msg(
-                                comms->next_msg_id(), this->display_name,
-                                "ERROR: Unknown UDP packet type", true
-                            );
+            auto e_msg_id = comms->next_msg_id();
+            auto err_dk = "ERROR: Unknown UDP packet type";
+            auto err_msg = Toolkit::build_msg(e_msg_id, this->display_name,
+                                              err_dk, true);
             comms->send_udp_message(err_msg);
             break;
     }
-    processed_udp_ids.insert(msg_id);
-
+    processed_ids.insert(msg_id);
 }
 
 void Client_Session::handle_udp_confirm(const std::vector<uint8_t>& pac) {
@@ -458,7 +489,7 @@ void Client_Session::handle_udp_confirm(const std::vector<uint8_t>& pac) {
 void Client_Session::handle_udp_reply(const std::vector<uint8_t>& pac) { 
     uint16_t msg_id = (pac[1] << 8) | pac[2];
     uint8_t result = pac[3];
-    uint16_t ref_msg_id = (pac[4] << 8) | pac[5];
+    uint16_t ref_msg_id = (pac[4] << 8) | pac[5]; // ?? i should use it ig
     std::string msg_content;
     
     for (size_t i = 6; i < pac.size() && pac[i] != 0x00; ++i) {
@@ -474,6 +505,8 @@ void Client_Session::handle_udp_reply(const std::vector<uint8_t>& pac) {
     comms->send_udp_message(Toolkit::build_confirm(msg_id));
     
     if (state == ClientState::Auth) {
+
+        printf_debug("REPLY RECEIVED %d", result);
         state = (result == 1 ? ClientState::Open : ClientState::Start);
     } else if (state == ClientState::Join) {
         state = ClientState::Open;
@@ -534,6 +567,6 @@ void Client_Session::handle_udp_bye(const std::vector<uint8_t>& pac) {
     //comms->receive_udp_message(); // maybe like in run instead???? check after having enough sleep
     // confirm bye either received or timed out
     // wait for possible retransmit - if 
-    printf_debug("ending program");
+    printf_debug("Ending program");
     graceful_exit(0);
 }

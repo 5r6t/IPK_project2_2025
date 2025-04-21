@@ -1,7 +1,7 @@
 /**
  * @file client_comms.cpp
  * @brief IPK project 2 - Client for a chat server
- * @date 15-4-2025
+ * @date 21-4-2025
  * Author: Jaroslav Mervart, xmervaj00
 */
 
@@ -32,42 +32,6 @@ void Client_Comms::terminate_connection(int ex_code) {
         close(client_socket);
     }
     exit(ex_code);
-}
-
-std::optional<std::string> Client_Comms::timed_tcp_reply() 
-{
-    fd_set rfds;
-    FD_ZERO(&rfds);
-    FD_SET(client_socket, &rfds);
-
-    struct timeval tv;
-    tv.tv_sec = TCP_TIMEOUT / 1000;
-    tv.tv_usec = (TCP_TIMEOUT % 1000) * 1000;
-
-    int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
-    if (ready <= 0) {
-        return std::nullopt;
-    }
-
-    return receive_tcp_message();
-}
-
-std::optional<std::vector<uint8_t>> Client_Comms::timed_udp_reply() 
-{
-    fd_set rfds;
-    FD_ZERO(&rfds);
-    FD_SET(client_socket, &rfds);
-
-    struct timeval tv;
-    tv.tv_sec =  this->udp_timeout / 1000;
-    tv.tv_usec = (this->udp_timeout % 1000) * 1000;
-
-    int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
-    if (ready <= 0) {
-        return std::nullopt;
-    }
-
-    return receive_udp_message();
 }
 
 void Client_Comms::resolve_ip() {
@@ -128,7 +92,7 @@ void Client_Comms::connect_tcp()
 
     struct sockaddr_in server_addr {};
         server_addr.sin_family = family;
-        server_addr.sin_port = htons(this->port); // port from config
+        server_addr.sin_port = htons(this->port);
         inet_pton(AF_INET, this->ip_address.c_str(), &server_addr.sin_addr);
         
     socklen_t address_size = sizeof(server_addr);
@@ -151,7 +115,6 @@ void Client_Comms::connect_tcp()
 void Client_Comms::send_tcp_message(const std::string &msg) {
     int bytes_tx = send(this->client_socket, msg.c_str(), strlen(msg.c_str()), 0);
     if (bytes_tx < 0) {
-        //perror("ERROR: send");
         std::cerr << "ERROR: Cannot send message: " << msg << "\n";
         return;
     }
@@ -207,6 +170,24 @@ void Client_Comms::receive_tcp_chunk() {
     buffer += temp;
 }
 
+std::optional<std::string> Client_Comms::timed_tcp_reply() 
+{
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(client_socket, &rfds);
+
+    struct timeval tv;
+    tv.tv_sec = TCP_TIMEOUT / 1000;
+    tv.tv_usec = (TCP_TIMEOUT % 1000) * 1000;
+
+    int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
+    if (ready <= 0) {
+        return std::nullopt;
+    }
+
+    return receive_tcp_message();
+}
+
 /**
   *   H    H  HOOOO   HHHO
   *   H    H  H    O  H   H
@@ -222,7 +203,6 @@ void Client_Comms::set_udp()
     int protocol = 0;
     this->client_socket = socket(family, type, protocol);
     if (this->client_socket <= 0) {
-        //perror("ERRORR: socket");
         std::cerr << "ERROR: Cannot create socket.\n";
         terminate_connection(ERR_INTERNAL);
     }
@@ -247,7 +227,7 @@ void Client_Comms::send_udp_packet(const std::vector<uint8_t>& pac)
     int bytes_tx = sendto(this->client_socket, pac.data(), pac.size(), 
                           flags, address, address_size);
     if (bytes_tx < 0) {
-        perror("ERROR: sendto");
+        std::cerr << "ERROR: Cannot send, try again.\n";
     }                          
     return;
 }
@@ -255,14 +235,12 @@ void Client_Comms::send_udp_packet(const std::vector<uint8_t>& pac)
 std::vector<uint8_t> Client_Comms::receive_udp_message() 
 {
     printf_debug("Receiving UDP message.");
-    //std::vector<uint8_t> rcv = receive_udp_packet();
-    //return rcv;
     return receive_udp_packet();              
 }
 
 std::vector<uint8_t> Client_Comms::receive_udp_packet() 
 {
-    printf_debug("Receiving UDP message...");
+    printf_debug("Receiving UDP packet...");
 
     std::vector<uint8_t> data;
     char temp[BUFFER_SIZE];
@@ -291,4 +269,23 @@ std::vector<uint8_t> Client_Comms::receive_udp_packet()
 
     data.insert(data.end(), temp, temp + bytes_rx); // copying into vector
     return data;
+}
+
+
+std::optional<std::vector<uint8_t>> Client_Comms::timed_udp_reply() 
+{
+    fd_set rfds;
+    FD_ZERO(&rfds);
+    FD_SET(client_socket, &rfds);
+
+    struct timeval tv;
+    tv.tv_sec =  this->udp_timeout / 1000;
+    tv.tv_usec = (this->udp_timeout % 1000) * 1000;
+
+    int ready = select(client_socket + 1, &rfds, nullptr, nullptr, &tv);
+    if (ready <= 0) {
+        return std::nullopt;
+    }
+
+    return receive_udp_message();
 }

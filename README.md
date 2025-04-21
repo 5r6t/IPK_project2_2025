@@ -4,9 +4,8 @@
 - [Assignment Link](https://git.fit.vutbr.cz/NESFIT/IPK-Projects/src/branch/master/Project_2/README.md)
 - [Project Repository Link](https://git.fit.vutbr.cz/xmervaj00/IPK_project_dos)
 
-## 1. Project Overview
-- Brief description of what the client does
-- Supported protocols: TCP and UDP
+## 1. Description
+This is an CLI client for communicating with a predefined server using either TCP or UDP protocol. 
 
 ## 2. Compilation and Usage
 ### 2.1. Compilation

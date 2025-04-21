@@ -564,9 +564,17 @@ void Client_Session::handle_udp_bye(const std::vector<uint8_t>& pac) {
     // server sent bye
     uint16_t ref_msg_id = (pac[1] << 8) | pac[2];
     comms->send_udp_message(Toolkit::build_confirm(ref_msg_id));
-    //comms->receive_udp_message(); // maybe like in run instead???? check after having enough sleep
-    // confirm bye either received or timed out
-    // wait for possible retransmit - if 
+    for (int i = 0; i < config.get_retries(); ++i) {
+        auto pac = comms->timed_udp_reply();
+        if (!pac) break; // no retransmissions received
+
+        if ((*pac)[0] == 0xFF) { // FF = BYE
+            uint16_t msg_id = ((*pac)[1] << 8) | (*pac)[2];
+            comms->send_udp_message(Toolkit::build_confirm(msg_id));
+            printf_debug("Resent confirm for BYE msg_id: %d", msg_id);
+        }
+    }
+
     printf_debug("Ending program");
     graceful_exit(0);
 }

@@ -166,7 +166,7 @@ Testing was done only after the program has progressed enough to not cause any i
 - If no REPLY to AUTH is received, the client will be stuck in an AUTH state. This happens because of how the FSM logic is handled. This was discovered when FIT VPN wasn't used during testing on publicly available server (UDP). Possible fix could include forced receive in `send_auth()` function.
 
 ## 7. Regarding the Use of Artificial Intelligence
-Models used for this purpose:
+Models used:
 - GPT-4o
 - Qwen2.5-Coder (7B / 14B), hosted locally with [Ollama](https://github.com/ollama/ollama)
 

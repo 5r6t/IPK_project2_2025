@@ -106,7 +106,7 @@ This is an CLI client for communicating with a predefined server using either TC
 
 **TCP behavior**:
 
-Because TCP is a byte stream, received messages are stored in a buffer, to handle them in order without dropping anything. Timeout of 5 seconds gives server enough time to respond. In case no response is received, program gracefully ends (meaning it sends ERR/BYE to the server and ends connection without any RST flags). 
+Because TCP is a byte stream, received messages are stored in a buffer, to handle them in order without dropping anything. Timeout of 5 seconds gives server enough time to respond. If no response is received, program gracefully terminates the connection and exits (meaning it sends ERR/BYE to the server and ends connection without any RST flags).
 
 **UDP behavior**: 
 
@@ -125,13 +125,14 @@ As for the UDP protocol, each message has to be reconstructed from bytes, theref
 
 ### 5.2. Testing Environments
 - Loopback
-- Public reference server (provided in [specification](https://git.fit.vutbr.cz/NESFIT/IPK-Projects/src/branch/master/Project_2#cli-arguments))
+- Public reference server (provided in [specification](#8. Sources))
 
 ### 5.3. Testing Machines
-- Laptop with Fedora Linux 41 (Workstation Edition) and Windows 11 installed.
-- While there was an attempt to test on Windows 11 and Windows Linux Subsystem 2 (WSL2), it has been dropped.
-- Provided virtual machine was used sparingly.
+- Laptop with Fedora Linux 41 (Workstation Edition) and Windows 11, with WSL2 (Debian GNU/Linux 12 (bookworm)).
+- Provided virtual machine (Ubuntu 24.04.1 LTS)
+- FIT Server: merlin.fit.vutbr.cz 	(Devuan GNU/Linux 5 (daedalus))
 
+Note: It is not possible to compile this project natively on Windows because it lacks libraries like `sys/socket.h`. 
 ### 5.4. Testing UDP on Loopback:
 1. Create message from hex, e.g. PING 
 ```bash

@@ -88,7 +88,6 @@ void Client_Session::run(){
         if (FD_ISSET(comms->get_socket(), &rfds)) {
             if (config.is_tcp()) {
                 comms->receive_tcp_chunk();
-                //handle_tcp_response(tcp_msg);
                 
                 while (true) {
                     size_t pos = comms->buffer.find("\r\n");
@@ -318,7 +317,7 @@ bool Client_Session::send_with_retries(const std::vector<uint8_t>& msg, uint16_t
 
         auto reply = comms->timed_udp_reply();
         if (reply.has_value()) {
-            handle_udp_response(*reply); // this will confirm state change
+            handle_udp_response(*reply);
             return true;
         }
         printf_debug("Retry %d for msg_id %d", i + 1, msg_id);
@@ -489,7 +488,7 @@ void Client_Session::handle_udp_confirm(const std::vector<uint8_t>& pac) {
 void Client_Session::handle_udp_reply(const std::vector<uint8_t>& pac) { 
     uint16_t msg_id = (pac[1] << 8) | pac[2];
     uint8_t result = pac[3];
-    uint16_t ref_msg_id = (pac[4] << 8) | pac[5]; // ?? i should use it ig
+    //uint16_t ref_msg_id = (pac[4] << 8) | pac[5];
     std::string msg_content;
     
     for (size_t i = 6; i < pac.size() && pac[i] != 0x00; ++i) {
@@ -561,7 +560,6 @@ void Client_Session::handle_udp_err(const std::vector<uint8_t>& pac) {
 }
 
 void Client_Session::handle_udp_bye(const std::vector<uint8_t>& pac) {
-    // server sent bye
     uint16_t ref_msg_id = (pac[1] << 8) | pac[2];
     comms->send_udp_message(Toolkit::build_confirm(ref_msg_id));
     for (int i = 0; i < config.get_retries(); ++i) {

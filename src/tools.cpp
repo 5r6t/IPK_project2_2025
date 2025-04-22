@@ -17,9 +17,7 @@ int Toolkit::catch_stoi(const std::string &str, int size, const std::string &fla
         }
         return value;
     } catch (...) {
-        std::cerr << "Error: " 
-                  << flag 
-                  << " must be a positive number <= " 
+        std::cerr << "Error: " << flag << " must be a positive number <= "
                   << size << "\n";
         exit(ERR_INVALID);
     }
@@ -61,7 +59,7 @@ void Toolkit::append_uint16(std::vector<uint8_t>& buf, uint16_t value)
 void Toolkit::append_string(std::vector<uint8_t>& buf, const std::string& s) 
 {
     buf.insert(buf.end(), s.begin(), s.end());
-    buf.push_back(0); // null terminator - every string now terminated with 0
+    buf.push_back(0); // null terminator
 }
 
 std::vector<uint8_t> Toolkit::build_confirm (uint16_t ref_msg_id) 

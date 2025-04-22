@@ -71,7 +71,7 @@ void Client_Init::validate()
     printf_debug("Timeout:   %u ms", timeout);
     printf_debug("Retries:   %u", retries);
     if (this->protocol == "" || this->hostname == "" ) {
-        std::cerr << "Protocol or IP not selected, display help with '-h'.\n";
+        std::cout << "Protocol or IP not selected, display help with '-h'.\n";
         exit(ERR_INVALID);
     }
 }

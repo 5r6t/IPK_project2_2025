@@ -23,7 +23,7 @@ void Client_Comms::connect_set() {
     if (this->tproto) {
         connect_tcp();
     } else {
-        set_udp(); // no connect, just sets socket
+        set_udp();
     }
 }
 
@@ -68,7 +68,7 @@ void Client_Comms::resolve_ip() {
                 printf_debug("Resolved UDP address = %s, port = %d", buf, ntohs(udp_address.sin_port));
 
             }
-            break; // First resolved address is used
+            break; // Found address
         }
     }
     printf_debug("Success, hostname resolved.");

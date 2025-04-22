@@ -133,19 +133,67 @@ As for the UDP protocol, each message has to be reconstructed from bytes, theref
 - Provided virtual machine was used sparingly.
 
 ### 5.4. Testing UDP on Loopback:
-1. Create message from hex (reply/auth/msg/confirm) `xxd -r -p x_msg.hex > x_msg.bin`
-2. Start server: `nc -4 -u -l -v 127.0.0.1 4567`
+1. Create message from hex, e.g. PING 
+```bash
+CLI: echo "fd0002" >  ping_msg.hex
+CLI: xxd -r -p x_msg.hex > ping_msg.bin
+```
+2. Start server: 
+```bash
+CLI: nc -4 -u -l -v 127.0.0.1 4567
+
+Ncat: Version 7.92 ( https://nmap.org/ncat )
+Ncat: Listening on 127.0.0.1:4567
+```
 3. Start client: `./ipk25chat-client -s 127.0.0.1 -t udp -d 25000` with larger timeout value, because we are responding manually
 4. Start Wireshark, start scanning on `lo` and set filter `udp.port == 4567`
 5. Send AUTH message from client `/auth name secret disp_name`
 6. Find out from which port is client sending the data with Wireshark (e.g. 87654).
-7. Send confirmation message to the client using `nc -4 -u -v 127.0.0.1 87654 < confirm_msg.bin`
-8. Send reply message to the client using  `nc -4 -u -v 127.0.0.1 87654 < reply_msg.bin`
-9. Client now displays message `Action Success: welcome` and a debugging print notifies us that the dynamic address has been set.
-10. End old and start new server: `nc -4 -u -l -v 127.0.0.1 55655`, where port `55655` is port from which the previous Netcat command sent the message.
-11. Now it is possible for client to send messages to the server and server can send messages using `nc -4 -u -v 127.0.0.1 87654 < msg_msg.bin` (confirmation messages are omitted for simplicity's sake).
-12. End client by `Ctrl+C/Ctrl+D` or send `nc -4 -u -v 127.0.0.1 4567 < bye_msg.bin` (or err_msg.bin)`.
 
+Note: To make sending confirmation messages easier, the following script can be used:
+```bash
+#!/bin/bash
+# File: make_confirm.sh
+if [ $# -ne 1 ]; then
+   exit 1
+fi
+
+MSG_ID=$1
+HEX=$(printf "00%04x" $MSG_ID)
+echo $HEX | xxd -r -p > confirm_msg.bin
+```
+
+7. Send confirmation message to the client using:
+```bash
+./make_confirm 0
+nc -4 -u -v 127.0.0.1 87654 < confirm_msg.bin
+```
+(confirmations for following messages are omitted for simplicity's sake)
+
+8. Send reply message to the client using
+```bash
+nc -4 -u -v 127.0.0.1 87654 < reply_msg.bin
+```
+9. Client now displays message `Action Success: welcome` and a debugging print notifies us that the dynamic address has been set.
+```bash
+src/client_comms.cpp:266  | receive_udp_packet | Stored dynamic server address: port 55655
+Action Success: Auth success.
+```
+10. End old and start new server, where port `55655` is port from which the previous Netcat command sent the message.:
+```bash
+nc -4 -u -l -v 127.0.0.1 55655
+```
+11. Now it is possible for client to send messages to the server and server can send messages using 
+```bash
+nc -4 -u -v 127.0.0.1 87654 < msg_msg.bin`
+```
+12. End client by pressing `Ctrl+C` / `Ctrl+D`, or by sending a BYE or ERR message:
+```bash
+nc -4 -u -v 127.0.0.1 4567 < bye_msg.bin
+
+# BYE message can be seen in Wireshark as well
+3274	961.083449771	127.0.0.1	127.0.0.1	IPK25-CHAT	46	C → Server | ID=0, Type=bye
+```
 ### 5.5. Testing TCP on Loopback:
 1. Start server: `nc -C -4 -l 127.0.0.1 4567` 
 2. Start client: `./ipk25chat-client -s 127.0.0.1 -t tcp`
@@ -155,6 +203,70 @@ As for the UDP protocol, each message has to be reconstructed from bytes, theref
 6. Client now displays message `Action Success: welcome`.
 7. Now client and server can send messages back and forth.
 8. Client will exit on an ERR/BYE message received from the server or by `Ctrl+C/Ctrl+D`.
+#### 5.5.1. Authentication example
+Server is launched:
+```bash
+nc -l -C -4 -v 127.0.0.1 4567
+
+Ncat: Version 7.92 ( https://nmap.org/ncat )
+Ncat: Listening on 127.0.0.1:4567
+```
+Client is launched and user sends an AUTH message:
+```bash
+./ipk25chat-client -t tcp -s 127.0.0.1
+
+/auth xlogin secret_seq disp_name
+```
+
+Server receives AUTH message and responds with positive REPLY:
+```bash
+AUTH xlogin AS disp_name USING secret_seq
+REPLY OK IS welcome
+```
+
+Client acknowledges the REPLY message:
+```bash
+Action Success: welcome
+/help
+-----------------------------------------
+Supported commands:
+  /auth <username> <secret> <displayname>
+  /join <channel>
+  /rename <displayname>
+  /help
+Status:
+  Current display name: disp_name
+  Authenticated: true
+-----------------------------------------
+```
+
+#### 5.5.2. Timeout example
+REPLY message was not received within 5s:
+```bash
+AUTH xlogin AS disp_name USING secret_seq
+ERROR: Authentication timed out. # Client sends BYE message
+```
+Server receives BYE message:
+```bash
+BYE FROM disp_name
+```
+
+#### 5.5.2. Sending messages and ending client session
+Client (invalid message, then valid one, then exit):
+```bash
+^[[B          # accidental arrow key
+ERROR: Invalid format of MessageContent, try again.
+Hello 
+Henry: I'm feeling quite hungry # message received from server
+^C
+```
+
+Server receives message and sends message from another other user:
+```bash
+MSG FROM disp_name IS Hello # message received from client
+MSG FROM Henry IS I'm feeling quite hungry # message received from other client
+BYE FROM disp_name 
+```
 
 ### 5.6. Testing TCP/UDP on public server
 Testing was done only after the program has progressed enough to not cause any issues, such as retransmitting packages indefinitely and similar possible issues. In order to test out the join functionality, `.` character had to be temporarily allowed in `ChannelID` check.
@@ -170,7 +282,7 @@ Models used:
 - Qwen2.5-Coder (7B / 14B), hosted locally with [Ollama](https://github.com/ollama/ollama)
 
 Usage:
-- Debugging
+- Debugging and testing
 - Discussing design decisions
 - Clarifying the specification requirements
 - Understanding aspects of C++ language

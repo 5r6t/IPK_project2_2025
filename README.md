@@ -117,7 +117,7 @@ While using TCP protocol, `tcp_buffer` is checked for delimiters, in order to ex
 
 As for the UDP protocol, each message has to be reconstructed from bytes, therefore small, but readable messages have been created for that purpose. Those functions also decide how to react to the messages based on FSM.
 
-##5. Testing
+## 5. Testing
 ### 5.1. Tools Used:
 - Wireshark (version 4.4.5) with IPK25-CHAT protocol dissector plugin (provided in [specification](https://git.fit.vutbr.cz/NESFIT/IPK-Projects/src/branch/master/Project_2#cli-arguments))
 - Netcat (to receive and send messages on loopback)
@@ -129,28 +129,34 @@ As for the UDP protocol, each message has to be reconstructed from bytes, theref
 
 ### 5.3. Testing Machines
 - Laptop with Fedora Linux 41 (Workstation Edition) and Windows 11 installed.
-- While there was an attempt to test on Windows 11 and Windows Linux Subsystem 2 (WSL), it has been dropped.
+- While there was an attempt to test on Windows 11 and Windows Linux Subsystem 2 (WSL2), it has been dropped.
 - Provided virtual machine was used sparingly.
 
 ### 5.4. Testing UDP on Loopback:
 1. Create message from hex, e.g. PING 
 ```bash
-CLI: echo "fd0002" >  ping_msg.hex
-CLI: xxd -r -p x_msg.hex > ping_msg.bin
+echo "fd0002" >  ping_msg.hex
+xxd -r -p x_msg.hex > ping_msg.bin
 ```
 2. Start server: 
 ```bash
-CLI: nc -4 -u -l -v 127.0.0.1 4567
+nc -4 -u -l -v 127.0.0.1 4567
 
 Ncat: Version 7.92 ( https://nmap.org/ncat )
 Ncat: Listening on 127.0.0.1:4567
 ```
-3. Start client: `./ipk25chat-client -s 127.0.0.1 -t udp -d 25000` with larger timeout value, because we are responding manually
+3. Launch client with larger timeout value, because we are responding manually:
+```bash
+./ipk25chat-client -s 127.0.0.1 -t udp -d 25000
+```
 4. Start Wireshark, start scanning on `lo` and set filter `udp.port == 4567`
-5. Send AUTH message from client `/auth name secret disp_name`
+5. Send AUTH message from client: 
+```bash
+/auth name secret disp_name
+```
 6. Find out from which port is client sending the data with Wireshark (e.g. 87654).
 
-Note: To make sending confirmation messages easier, the following script can be used:
+**Note**: To make sending confirmation messages easier, the following script can be used:
 ```bash
 #!/bin/bash
 # File: make_confirm.sh

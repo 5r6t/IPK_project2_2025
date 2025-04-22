@@ -75,7 +75,7 @@ This is an CLI client for communicating with a predefined server using either TC
 - `ERR_INTERNAL (99)`: Internal program error (e.g., failed to create socket).
 
 ### 3.3. Notes
-- Argument order is flexible
+- Argument order is flexible and code has been copied from the first Project 1 - OMEGA: L4 Scanner [(1)](#sources)
 - Program can be interrupted at any time using `Ctrl+C/Ctrl+D` (graceful shutdown -- does not immediately kill the program).
 - Errors relevant to the user are printed to standard input.
 - Format of messages, ChannelID and the rest is enforced through regular expressions and easily modifiable. Located inside `Tools`.
@@ -102,15 +102,15 @@ This is an CLI client for communicating with a predefined server using either TC
 - `Toolkit` contains various functions to abstract from building UDP messages, checking type sizes and regular expressions. It aims to be readable and easily modifiable, containing seemingly redundant functions like `append_uint8()`.
 
 ### 4.2. Message Sending and Receiving
-- Sending and receiving in real time is handled by using `select()`. While `poll()` is better than select by allowing more descriptors, in our case, `select()` is enough.
+- Sending and receiving in real time is handled by using `select()`[(7-11)](#sources). While `poll()` is better [(9)](#sources) than select by allowing larger descriptors, in our case, `select()` is enough.
 
 **TCP behavior**:
 
-Because TCP is a byte stream, received messages are stored in a buffer, to handle them in order without dropping anything. Timeout of 5 seconds gives server enough time to respond. If no response is received, program gracefully terminates the connection and exits (meaning it sends ERR/BYE to the server and ends connection without any RST flags).
+Because TCP is a byte stream, received messages are stored in a buffer [(6)](#sources), to handle them in order without dropping anything. Timeout of 5 seconds gives server enough time to respond. If no response is received, program gracefully terminates the connection and exits (meaning it sends ERR/BYE to the server and ends connection without any RST flags).
 
 **UDP behavior**: 
 
-UDP is considered lossy, and therefore, it is important to handle its flaws on an application level. Each message sent is expected to receive a confirmation message, and likewise, each received message to be sent a confirmation.
+UDP is unreliable, and therefore, it is important to handle its flaws on an application level. Each message sent is expected to receive a confirmation message, and likewise, each received message to be sent a confirmation.
 
 ### 4.3. Packet Parsing
 While using TCP protocol, `tcp_buffer` is checked for delimiters, in order to extract complete messages. If a complete message is found, it is sent to `parse_tcp_message(msg)`, where either a match occurs, and a filled `ParseMessage` structure is returned, or no match results in nothing being returned (thanks to `optional` library).
@@ -119,22 +119,22 @@ As for the UDP protocol, each message has to be reconstructed from bytes, theref
 
 ## 5. Testing
 ### 5.1. Tools Used:
-- Wireshark (version 4.4.5) with IPK25-CHAT protocol dissector plugin (provided in [specification](https://git.fit.vutbr.cz/NESFIT/IPK-Projects/src/branch/master/Project_2#cli-arguments))
+- Wireshark (version 4.4.5) with IPK25-CHAT protocol dissector plugin (provided in specification [(13)](#sources))
 - Netcat (to receive and send messages on loopback)
 - xxd (to convert hexadecimal messages into binary format)
 
 ### 5.2. Testing Environments
 - Loopback
-- Public reference server (provided in [specification](#8. Sources))
+- Public reference server [(2)](#sources)
 
 ### 5.3. Testing Machines
 - Laptop with Fedora Linux 41 (Workstation Edition) and Windows 11, with WSL2 (Debian GNU/Linux 12 (bookworm)).
 - Provided virtual machine (Ubuntu 24.04.1 LTS)
-- FIT Server: merlin.fit.vutbr.cz 	(Devuan GNU/Linux 5 (daedalus))
+- FIT Server: merlin.fit.vutbr.cz (Devuan GNU/Linux 5 (daedalus))
 
-Note: It is not possible to compile this project natively on Windows because it lacks libraries like `sys/socket.h`. 
+Note: It is not possible to compile this project natively on Windows because it lacks libraries like `sys/socket.h` [(14)](#sources). 
 ### 5.4. Testing UDP on Loopback:
-1. Create message from hex, e.g. PING 
+1. Creating messsages from hexadecimal representation, e.g. PING, with MessageID 2.
 ```bash
 echo "fd0002" >  ping_msg.hex
 xxd -r -p x_msg.hex > ping_msg.bin
@@ -278,7 +278,7 @@ BYE FROM disp_name
 ### 5.6. Testing TCP/UDP on public server
 Testing was done only after the program has progressed enough to not cause any issues, such as retransmitting packages indefinitely and similar possible issues. In order to test out the join functionality, `.` character had to be temporarily allowed in `ChannelID` check.
 - As for the testing itself, there wasn't really much to do. Connected using `/auth xlogin secret display_name`, then tried sending a message and joining other channels. At the end, after pressing `Ctrl+C`, chat messages were checked to see if `User left the channel` is present. 
-- Singular issue encountered was that the client never received UDP reply from the server after trying to authenticate. Using FIT VPN solved the problem.
+- Singular issue encountered was that the client never received UDP reply from the server after trying to authenticate. Using FIT VPN [(12)](#sources) solved the problem.
 
 ## 6. Known Limitations / Edge Cases
 - If no REPLY to AUTH is received, the client will be stuck in an AUTH state. This happens because of how the FSM logic is handled. This was discovered when FIT VPN wasn't used during testing on publicly available server (UDP). Possible fix could include forced receive in `send_auth()` function.
@@ -286,30 +286,27 @@ Testing was done only after the program has progressed enough to not cause any i
 ## 7. Regarding the Use of Artificial Intelligence
 Models used:
 - GPT-4o
-- Qwen2.5-Coder (7B / 14B), hosted locally with [Ollama](https://github.com/ollama/ollama)
+- Qwen2.5-Coder (7B / 14B), hosted locally with Ollama [(4)](#sources)
 
 Usage:
 - Debugging and testing
 - Discussing design decisions
 - Clarifying the specification requirements
 - Understanding aspects of C++ language
-- Refining code structure
+- Refining code structure (no copy-pasting)
 
-None of the code generated by AI was directly copied.
-
-## 8. Sources
-* [IPK Project 1 - OMEGA: L4 Scanner](https://git.fit.vutbr.cz/xmervaj00/IPK_project)
-* https://man7.org/linux/man-pages/man3/sockaddr.3type.html
-
-* [IPK2023-24L-04-PROGRAMOVANI.pdf](https://moodle.vut.cz/pluginfile.php/1081877/mod_folder/content/0/IPK2023-24L-04-PROGRAMOVANI.pdf?forcedownload=1)
-
-* https://stackoverflow.com/questions/15739490/should-i-use-size-t-or-ssize-t
-
-* https://stackoverflow.com/questions/3074824/reading-buffer-from-socket
-
-* https://stackoverflow.com/questions/32711521/how-to-use-select-on-sockets-properly
-* https://stackoverflow.com/questions/2284428/in-c-networking-using-select-do-i-first-have-to-listen-and-accept
-* https://man7.org/linux/man-pages/man2/select.2.html
-* https://man7.org/linux/man-pages/man2/select_tut.2.html
-
-* https://www.oreilly.com/library/view/hands-on-network-programming/9781789349863/8e8ea0c3-cf7f-46c0-bd6f-5c7aa6eaa366.xhtml
+## Sources
+1. IPK Project 1 – OMEGA. L4 Scanner (completed assignment). Gitea, 2025. Available from: https://git.fit.vutbr.cz/xmervaj00/IPK_project
+2.  IPK Project 2: Client for a chat server using the `IPK25-CHAT` protocol. Gitea, 2025. Accessed from https://git.fit.vutbr.cz/NESFIT/IPK-Projects/src/branch/master/Project_2#cli-arguments
+3. DOLEJŠKA, Daniel. _IPK2023-24L-04-PROGRAMOVANI_. Brno: VUT FIT, 2023. Accessed from: https://moodle.vut.cz/pluginfile.php/1081877/mod_folder/content/0/IPK2023-24L-04-PROGRAMOVANI.pdf
+4. Ollama. GitHub, 2025. Available from: https://github.com/ollama/ollama
+5. Stack Overflow. Should I use size_t or ssize_t? 2015. Accessed from: https://stackoverflow.com/questions/15739490/should-i-use-size-t-or-ssize-t
+6. Stack Overflow. Reading buffer from socket. 2011. Accessed from: https://stackoverflow.com/questions/3074824/reading-buffer-from-socket
+7. Stack Overflow. How to use select on sockets properly? 2015. Accessed from: https://stackoverflow.com/questions/32711521/how-to-use-select-on-sockets-properly
+8. Stack Overflow. In C networking, using select(), do I first have to listen() and accept()? 2010. Accessed from: https://stackoverflow.com/questions/2284428/in-c-networking-using-select-do-i-first-have-to-listen-and-accept
+9. select(2) - monitor multiple file descriptors. Linux manual pages, 2024. Available from: https://man7.org/linux/man-pages/man2/select.2.html
+10. select_tut(2) - background and tutorial information on the use select and pselect functions. Linux manual pages, 2024. Available from: https://man7.org/linux/man-pages/man2/select_tut.2.html
+11. Hands-On Network Programming with C. O’Reilly Online Learning – select() timeout, 2019. Accessed from: https://www.oreilly.com/library/view/hands-on-network-programming/9781789349863/8e8ea0c3-cf7f-46c0-bd6f-5c7aa6eaa366.xhtml
+12. FIT VPN - Configuration, 2025. Accessed from: https://www.fit.vut.cz/units/cvt/net/vpn.php.en
+13. IPK projects guideline repository. Accessed from: https://git.fit.vutbr.cz/NESFIT/IPK-Projects/src/branch/master
+14. Stack Overflow. How can I use sys/socket.h on Windows? 2023. Accessed from: https://stackoverflow.com/questions/67726142/how-can-i-use-sys-socket-h-on-windows
